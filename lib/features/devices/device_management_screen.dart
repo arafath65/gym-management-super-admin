@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -14,12 +16,39 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
   final AuthService _authService = AuthService();
   final TextEditingController _searchController = TextEditingController();
 
+  Timer? _searchDebounce;
+  final Set<String> _expandedDeviceIds = <String>{};
+
   List<Map<String, dynamic>> _devices = [];
   List<Map<String, dynamic>> _organizations = [];
+  List<Map<String, dynamic>> _branches = [];
 
   bool _isLoading = true;
+  bool _isLoadingBranches = false;
+  bool _organizationsLoaded = false;
+
   String? _error;
+  String? _branchError;
+
   String _statusFilter = 'all';
+
+  int? _selectedOrganizationId;
+  int? _selectedBranchId;
+
+  int _currentPage = 1;
+  int _pageSize = 25;
+  int _totalDevices = 0;
+  int _totalPages = 0;
+
+  int _loadRequestId = 0;
+  int _branchRequestId = 0;
+
+  Map<String, int> _statusCounts = {
+    'all': 0,
+    'pending': 0,
+    'active': 0,
+    'revoked': 0,
+  };
 
   static const Color _red = Color(0xFFE50914);
   static const Color _dark = Color(0xFF111111);
@@ -33,11 +62,42 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+
+    // Ignore any older request while the user is typing.
+    _loadRequestId++;
+
+    setState(() {
+      _currentPage = 1;
+    });
+
+    _searchDebounce = Timer(const Duration(milliseconds: 450), () {
+      if (!mounted) return;
+      _loadData(showLoading: false);
+    });
+  }
+
+  Future<void> _submitSearch() async {
+    _searchDebounce?.cancel();
+
+    if (_currentPage != 1) {
+      setState(() {
+        _currentPage = 1;
+      });
+    }
+
+    await _loadData();
+  }
+
   Future<void> _loadData({bool showLoading = true}) async {
+    final requestId = ++_loadRequestId;
+
     if (showLoading && mounted) {
       setState(() {
         _isLoading = true;
@@ -46,21 +106,73 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
     }
 
     try {
-      final results = await Future.wait([
-        _authService.getDevices(search: _searchController.text.trim()),
-        _authService.getOrganizations(),
-      ]);
+      if (!_organizationsLoaded) {
+        final organizations = await _authService.getOrganizations();
 
-      if (!mounted) return;
+        if (!mounted || requestId != _loadRequestId) return;
+
+        setState(() {
+          _organizations = organizations;
+          _organizationsLoaded = true;
+        });
+      }
+
+      final response = await _authService.getDevices(
+        status: _statusFilter,
+        organizationId: _selectedOrganizationId,
+        branchId: _selectedBranchId,
+        search: _searchController.text.trim(),
+        page: _currentPage,
+        limit: _pageSize,
+      );
+
+      if (!mounted || requestId != _loadRequestId) return;
+
+      final pagination = Map<String, dynamic>.from(
+        response['pagination'] as Map,
+      );
+
+      final rawCounts = Map<String, dynamic>.from(
+        response['statusCounts'] as Map,
+      );
+
+      int readCount(String key) {
+        final value = rawCounts[key];
+
+        if (value is num) return value.toInt();
+
+        return int.tryParse(value?.toString() ?? '') ?? 0;
+      }
+
+      final rawDevices = response['devices'] as List;
 
       setState(() {
-        _devices = results[0];
-        _organizations = results[1];
+        _devices = rawDevices.whereType<Map<String, dynamic>>().toList();
+
+        _currentPage = pagination['page'] is num
+            ? (pagination['page'] as num).toInt()
+            : _currentPage;
+
+        _totalPages = pagination['totalPages'] is num
+            ? (pagination['totalPages'] as num).toInt()
+            : 0;
+
+        _totalDevices = pagination['total'] is num
+            ? (pagination['total'] as num).toInt()
+            : 0;
+
+        _statusCounts = {
+          'all': readCount('all'),
+          'pending': readCount('pending'),
+          'active': readCount('active'),
+          'revoked': readCount('revoked'),
+        };
+
         _isLoading = false;
         _error = null;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || requestId != _loadRequestId) return;
 
       setState(() {
         _isLoading = false;
@@ -69,23 +181,113 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
     }
   }
 
-  List<Map<String, dynamic>> get _filteredDevices {
-    if (_statusFilter == 'all') return _devices;
+  Future<void> _loadBranches(int organizationId) async {
+    final requestId = ++_branchRequestId;
 
-    return _devices
-        .where((device) => device['status'] == _statusFilter)
-        .toList();
+    setState(() {
+      _isLoadingBranches = true;
+      _branchError = null;
+      _branches = [];
+    });
+
+    try {
+      final branches = await _authService.getBranches(
+        organizationId: organizationId,
+        activeOnly: false,
+      );
+
+      if (!mounted || requestId != _branchRequestId) return;
+
+      setState(() {
+        _branches = branches;
+        _isLoadingBranches = false;
+      });
+    } catch (e) {
+      if (!mounted || requestId != _branchRequestId) return;
+
+      setState(() {
+        _branches = [];
+        _isLoadingBranches = false;
+        _branchError = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
   }
 
+  Future<void> _onOrganizationChanged(int? organizationId) async {
+    setState(() {
+      _selectedOrganizationId = organizationId;
+      _selectedBranchId = null;
+      _currentPage = 1;
+      _branches = [];
+      _branchError = null;
+    });
+
+    if (organizationId != null) {
+      await _loadBranches(organizationId);
+    } else {
+      _branchRequestId++;
+      setState(() {
+        _isLoadingBranches = false;
+      });
+    }
+
+    await _loadData();
+  }
+
+  Future<void> _onBranchChanged(int? branchId) async {
+    setState(() {
+      _selectedBranchId = branchId;
+      _currentPage = 1;
+    });
+
+    await _loadData();
+  }
+
+  Future<void> _onStatusChanged(String? status) async {
+    if (status == null) return;
+
+    setState(() {
+      _statusFilter = status;
+      _currentPage = 1;
+    });
+
+    await _loadData();
+  }
+
+  Future<void> _onPageSizeChanged(int? value) async {
+    if (value == null) return;
+
+    setState(() {
+      _pageSize = value;
+      _currentPage = 1;
+    });
+
+    await _loadData();
+  }
+
+  Future<void> _goToPage(int page) async {
+    if (page < 1 || page > _totalPages || page == _currentPage) {
+      return;
+    }
+
+    setState(() {
+      _currentPage = page;
+    });
+
+    await _loadData();
+  }
+
+  List<Map<String, dynamic>> get _filteredDevices => _devices;
+
   int _countStatus(String status) {
-    return _devices.where((device) => device['status'] == status).length;
+    return _statusCounts[status] ?? 0;
   }
 
   String _formatDate(dynamic value) {
     if (value == null) return 'Never';
 
     final date = DateTime.tryParse(value.toString());
-    if (date == null) return 'â€”';
+    if (date == null) return 'ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â';
 
     final local = date.toLocal();
 
@@ -666,6 +868,11 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
         device['organization_name']?.toString() ?? 'Unknown organization';
     final branchName = device['branch_name']?.toString();
 
+    final deviceKey =
+        device['id']?.toString() ?? device['device_uuid']?.toString() ?? '';
+
+    final isExpanded = _expandedDeviceIds.contains(deviceKey);
+
     return Card(
       color: Colors.white,
       elevation: 0,
@@ -675,140 +882,114 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
         side: const BorderSide(color: Color(0xFFE2E7EF)),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(15),
+        padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                CircleAvatar(
-                  backgroundColor: const Color(0xFFFFE8E8),
-                  child: Icon(
-                    device['device_type'] == 'android_tablet'
-                        ? Icons.tablet_android
-                        : Icons.devices,
-                    color: _red,
-                  ),
-                ),
-                const SizedBox(width: 12),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        device['device_name']?.toString() ?? 'Unnamed Device',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () {
+                      if (deviceKey.isEmpty) return;
+
+                      setState(() {
+                        if (isExpanded) {
+                          _expandedDeviceIds.remove(deviceKey);
+                        } else {
+                          _expandedDeviceIds.add(deviceKey);
+                        }
+                      });
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 20,
+                            backgroundColor: const Color(0xFFFFE8E8),
+                            child: Icon(
+                              device['device_type'] == 'android_tablet'
+                                  ? Icons.tablet_android
+                                  : Icons.devices,
+                              color: _red,
+                              size: 21,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  device['device_name']?.toString() ??
+                                      'Unnamed Device',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  _typeLabel(device['device_type']),
+                                  style: const TextStyle(
+                                    color: Colors.blueGrey,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          _statusBadge(status),
+                          const SizedBox(width: 4),
+                          Icon(
+                            isExpanded
+                                ? Icons.keyboard_arrow_up
+                                : Icons.keyboard_arrow_down,
+                            color: Colors.blueGrey,
+                            size: 21,
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 3),
-                      Text(
-                        _typeLabel(device['device_type']),
-                        style: const TextStyle(
-                          color: Colors.blueGrey,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-                _statusBadge(status),
-                PopupMenuButton<String>(
-                  tooltip: 'Device actions',
-                  onSelected: (value) => _handleDeviceAction(device, value),
-                  itemBuilder: (context) {
-                    if (status == 'active') {
-                      return const [
-                        PopupMenuItem(
-                          value: 'revoke',
-                          child: Row(
-                            children: [
-                              Icon(Icons.block, color: _red, size: 19),
-                              SizedBox(width: 10),
-                              Text('Revoke Device'),
-                            ],
-                          ),
-                        ),
-                      ];
-                    }
-
-                    if (status == 'revoked') {
-                      return const [
-                        PopupMenuItem(
-                          value: 'reactivate',
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.refresh,
-                                color: Color(0xFF16834A),
-                                size: 19,
-                              ),
-                              SizedBox(width: 10),
-                              Text('Reactivate Device'),
-                            ],
-                          ),
-                        ),
-                      ];
-                    }
-
-                    return const [
-                      PopupMenuItem(
-                        value: 'regenerate',
-                        child: Row(
-                          children: [
-                            Icon(Icons.key, size: 19),
-                            SizedBox(width: 10),
-                            Text('Regenerate Code'),
-                          ],
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: 'revoke',
-                        child: Row(
-                          children: [
-                            Icon(Icons.block, color: _red, size: 19),
-                            SizedBox(width: 10),
-                            Text('Cancel Registration'),
-                          ],
-                        ),
-                      ),
-                    ];
-                  },
-                ),
+                _deviceActionsMenu(device, status),
               ],
             ),
-            const SizedBox(height: 14),
-            const Divider(height: 1),
-            const SizedBox(height: 12),
-            _detailRow(
-              Icons.business_outlined,
-              'Organization',
-              organizationName,
-            ),
-            const SizedBox(height: 7),
-            _detailRow(
-              Icons.location_on_outlined,
-              'Branch',
-              branchName == null || branchName.isEmpty
-                  ? 'No branch assigned'
-                  : branchName,
-            ),
-            const SizedBox(height: 7),
-            _detailRow(
-              Icons.fingerprint,
-              'Device UUID',
-              device['device_uuid']?.toString() ?? 'â€”',
-            ),
-            const SizedBox(height: 7),
-            _detailRow(
-              Icons.schedule,
-              'Last seen',
-              _formatDate(device['last_seen_at']),
-            ),
-            if (status == 'pending') ...[
+            if (isExpanded) ...[
+              const SizedBox(height: 10),
+              const Divider(height: 1),
+              const SizedBox(height: 12),
+              _detailRow(
+                Icons.business_outlined,
+                'Organization',
+                organizationName,
+              ),
+              const SizedBox(height: 7),
+              _detailRow(
+                Icons.location_on_outlined,
+                'Branch',
+                branchName == null || branchName.isEmpty
+                    ? 'No branch assigned'
+                    : branchName,
+              ),
+              const SizedBox(height: 7),
+              _detailRow(
+                Icons.fingerprint,
+                'Device UUID',
+                device['device_uuid']?.toString() ?? '-',
+              ),
+              const SizedBox(height: 7),
+              _detailRow(
+                Icons.access_time,
+                'Last seen',
+                _formatDate(device['last_seen_at']),
+              ),
               const SizedBox(height: 7),
               _detailRow(
                 Icons.timer_outlined,
@@ -819,6 +1000,67 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _deviceActionsMenu(Map<String, dynamic> device, String status) {
+    return PopupMenuButton<String>(
+      tooltip: 'Device actions',
+      onSelected: (value) => _handleDeviceAction(device, value),
+      itemBuilder: (context) {
+        if (status == 'active') {
+          return const [
+            PopupMenuItem(
+              value: 'revoke',
+              child: Row(
+                children: [
+                  Icon(Icons.block, color: _red, size: 19),
+                  SizedBox(width: 10),
+                  Text('Revoke Device'),
+                ],
+              ),
+            ),
+          ];
+        }
+
+        if (status == 'revoked') {
+          return const [
+            PopupMenuItem(
+              value: 'reactivate',
+              child: Row(
+                children: [
+                  Icon(Icons.refresh, color: Color(0xFF16834A), size: 19),
+                  SizedBox(width: 10),
+                  Text('Reactivate Device'),
+                ],
+              ),
+            ),
+          ];
+        }
+
+        return const [
+          PopupMenuItem(
+            value: 'regenerate',
+            child: Row(
+              children: [
+                Icon(Icons.key, size: 19),
+                SizedBox(width: 10),
+                Text('Regenerate Code'),
+              ],
+            ),
+          ),
+          PopupMenuItem(
+            value: 'revoke',
+            child: Row(
+              children: [
+                Icon(Icons.block, color: _red, size: 19),
+                SizedBox(width: 10),
+                Text('Cancel Registration'),
+              ],
+            ),
+          ),
+        ];
+      },
     );
   }
 
@@ -845,24 +1087,233 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
     );
   }
 
-  Widget _filterChip(String label, String value, int count) {
-    final selected = _statusFilter == value;
-
-    return ChoiceChip(
-      label: Text('$label ($count)'),
-      selected: selected,
-      selectedColor: const Color(0xFFFFE8E8),
-      labelStyle: TextStyle(
-        color: selected ? _red : _dark,
-        fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-        fontSize: 12,
+  Widget _buildStatusDropdown() {
+    return InputDecorator(
+      decoration: InputDecoration(
+        labelText: 'Status',
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFD5DBE4)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFD5DBE4)),
+        ),
       ),
-      side: BorderSide(color: selected ? _red : const Color(0xFFD5DBE4)),
-      onSelected: (_) {
-        setState(() {
-          _statusFilter = value;
-        });
-      },
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _statusFilter,
+          isExpanded: true,
+          items: const [
+            DropdownMenuItem(value: 'all', child: Text('All Statuses')),
+            DropdownMenuItem(value: 'active', child: Text('Active')),
+            DropdownMenuItem(value: 'pending', child: Text('Pending')),
+            DropdownMenuItem(value: 'revoked', child: Text('Revoked')),
+          ],
+          onChanged: _isLoading ? null : _onStatusChanged,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOrganizationDropdown() {
+    final items = <DropdownMenuItem<int?>>[
+      const DropdownMenuItem<int?>(
+        value: null,
+        child: Text('All Organizations'),
+      ),
+      ..._organizations
+          .map((organization) {
+            final id = int.tryParse(organization['id'].toString());
+
+            return DropdownMenuItem<int?>(
+              value: id,
+              child: Text(
+                organization['name']?.toString() ?? 'Unnamed Organization',
+                overflow: TextOverflow.ellipsis,
+              ),
+            );
+          })
+          .where((item) => item.value != null),
+    ];
+
+    return InputDecorator(
+      decoration: InputDecoration(
+        labelText: 'Organization',
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFD5DBE4)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFD5DBE4)),
+        ),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<int?>(
+          value: _selectedOrganizationId,
+          isExpanded: true,
+          items: items,
+          onChanged: _isLoading ? null : _onOrganizationChanged,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBranchDropdown() {
+    final items = <DropdownMenuItem<int?>>[
+      const DropdownMenuItem<int?>(value: null, child: Text('All Branches')),
+      ..._branches
+          .map((branch) {
+            final id = int.tryParse(branch['id'].toString());
+
+            final branchName = branch['name']?.toString() ?? 'Unnamed Branch';
+            final branchStatus = branch['status']?.toString() ?? 'active';
+
+            return DropdownMenuItem<int?>(
+              value: id,
+              child: Text(
+                branchStatus == 'inactive'
+                    ? '$branchName (Inactive)'
+                    : branchName,
+                overflow: TextOverflow.ellipsis,
+              ),
+            );
+          })
+          .where((item) => item.value != null),
+    ];
+
+    return InputDecorator(
+      decoration: InputDecoration(
+        labelText: 'Branch',
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFD5DBE4)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFD5DBE4)),
+        ),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<int?>(
+          value: _selectedBranchId,
+          isExpanded: true,
+          items: items,
+          hint: const Text('All Branches'),
+          onChanged:
+              _selectedOrganizationId == null ||
+                  _isLoading ||
+                  _isLoadingBranches
+              ? null
+              : _onBranchChanged,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPaginationControls() {
+    final start = _totalDevices == 0 ? 0 : ((_currentPage - 1) * _pageSize) + 1;
+
+    final calculatedEnd = _currentPage * _pageSize;
+    final end = calculatedEnd > _totalDevices ? _totalDevices : calculatedEnd;
+
+    final displayedPageCount = _totalPages == 0 ? 1 : _totalPages;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E7EF)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Showing $startâ€“$end of $_totalDevices devices',
+                  style: const TextStyle(
+                    color: Colors.blueGrey,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const Text(
+                'Rows:',
+                style: TextStyle(fontSize: 12, color: Colors.blueGrey),
+              ),
+              const SizedBox(width: 8),
+              DropdownButtonHideUnderline(
+                child: DropdownButton<int>(
+                  value: _pageSize,
+                  items: const [
+                    DropdownMenuItem(value: 25, child: Text('25')),
+                    DropdownMenuItem(value: 50, child: Text('50')),
+                    DropdownMenuItem(value: 100, child: Text('100')),
+                  ],
+                  onChanged: _isLoading ? null : _onPageSizeChanged,
+                ),
+              ),
+            ],
+          ),
+          const Divider(height: 18),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(
+                tooltip: 'First page',
+                onPressed: !_isLoading && _currentPage > 1
+                    ? () => _goToPage(1)
+                    : null,
+                icon: const Icon(Icons.first_page),
+              ),
+              IconButton(
+                tooltip: 'Previous page',
+                onPressed: !_isLoading && _currentPage > 1
+                    ? () => _goToPage(_currentPage - 1)
+                    : null,
+                icon: const Icon(Icons.chevron_left),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text(
+                  'Page $_currentPage of $displayedPageCount',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Next page',
+                onPressed: !_isLoading && _currentPage < _totalPages
+                    ? () => _goToPage(_currentPage + 1)
+                    : null,
+                icon: const Icon(Icons.chevron_right),
+              ),
+              IconButton(
+                tooltip: 'Last page',
+                onPressed: !_isLoading && _currentPage < _totalPages
+                    ? () => _goToPage(_totalPages)
+                    : null,
+                icon: const Icon(Icons.last_page),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -932,7 +1383,7 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                               width: width,
                               child: _summaryCard(
                                 title: 'Total',
-                                value: _devices.length,
+                                value: _countStatus('all'),
                                 icon: Icons.devices,
                                 color: _dark,
                               ),
@@ -960,45 +1411,81 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                       },
                     ),
                     const SizedBox(height: 20),
-                    TextField(
-                      controller: _searchController,
-                      textInputAction: TextInputAction.search,
-                      onSubmitted: (_) => _loadData(),
-                      decoration: InputDecoration(
-                        hintText: 'Search device, UUID or organization',
-                        prefixIcon: const Icon(Icons.search),
-                        suffixIcon: IconButton(
-                          tooltip: 'Search',
-                          onPressed: () => _loadData(),
-                          icon: const Icon(Icons.arrow_forward),
-                        ),
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final wide = constraints.maxWidth >= 600;
+                        final searchWidth = wide
+                            ? constraints.maxWidth - 190
+                            : constraints.maxWidth;
+
+                        return Wrap(
+                          spacing: 12,
+                          runSpacing: 10,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: searchWidth,
+                              child: TextField(
+                                controller: _searchController,
+                                onChanged: _onSearchChanged,
+                                textInputAction: TextInputAction.search,
+                                onSubmitted: (_) => _submitSearch(),
+                                decoration: InputDecoration(
+                                  hintText:
+                                      'Search device, UUID or organization',
+                                  prefixIcon: const Icon(Icons.search),
+                                  suffixIcon: IconButton(
+                                    tooltip: 'Search',
+                                    onPressed: _submitSearch,
+                                    icon: const Icon(Icons.arrow_forward),
+                                  ),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            SizedBox(
+                              width: wide ? 178 : constraints.maxWidth,
+                              child: _buildStatusDropdown(),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final width = constraints.maxWidth >= 600
+                            ? (constraints.maxWidth - 12) / 2
+                            : constraints.maxWidth;
+
+                        return Wrap(
+                          spacing: 12,
+                          runSpacing: 10,
+                          children: [
+                            SizedBox(
+                              width: width,
+                              child: _buildOrganizationDropdown(),
+                            ),
+                            SizedBox(
+                              width: width,
+                              child: _buildBranchDropdown(),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                    if (_branchError != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        _branchError!,
+                        style: const TextStyle(color: _red, fontSize: 11),
                       ),
-                    ),
-                    const SizedBox(height: 14),
-                    Wrap(
-                      spacing: 7,
-                      runSpacing: 4,
-                      children: [
-                        _filterChip('All', 'all', _devices.length),
-                        _filterChip(
-                          'Pending',
-                          'pending',
-                          _countStatus('pending'),
-                        ),
-                        _filterChip('Active', 'active', _countStatus('active')),
-                        _filterChip(
-                          'Revoked',
-                          'revoked',
-                          _countStatus('revoked'),
-                        ),
-                      ],
-                    ),
+                    ],
                     const SizedBox(height: 16),
                     Row(
                       children: [
@@ -1053,12 +1540,36 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                         ),
                       )
                     else
-                      ...filtered.map(
-                        (device) => Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: _deviceCard(device),
-                        ),
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          const spacing = 12.0;
+                          final twoColumns = constraints.maxWidth >= 720;
+                          final cardWidth = twoColumns
+                              ? (constraints.maxWidth - spacing) / 2
+                              : constraints.maxWidth;
+
+                          return Wrap(
+                            spacing: spacing,
+                            runSpacing: spacing,
+                            children: filtered.map((device) {
+                              final key =
+                                  device['id']?.toString() ??
+                                  device['device_uuid']?.toString() ??
+                                  '';
+
+                              return SizedBox(
+                                key: ValueKey(key),
+                                width: cardWidth,
+                                child: _deviceCard(device),
+                              );
+                            }).toList(),
+                          );
+                        },
                       ),
+                    if (_totalDevices > 0) ...[
+                      const SizedBox(height: 4),
+                      _buildPaginationControls(),
+                    ],
                   ],
                 ),
         ),

@@ -428,10 +428,13 @@ class AuthService {
   // DEVICE MANAGEMENT
   // -------------------------------------------------------
 
-  Future<List<Map<String, dynamic>>> getDevices({
+  Future<Map<String, dynamic>> getDevices({
     String? status,
     int? organizationId,
+    int? branchId,
     String? search,
+    int page = 1,
+    int limit = 25,
   }) async {
     try {
       final token = await getToken();
@@ -440,14 +443,18 @@ class AuthService {
         throw Exception('Please sign in again.');
       }
 
-      final query = <String, dynamic>{};
+      final query = <String, dynamic>{'page': page, 'limit': limit};
 
-      if (status != null && status.isNotEmpty) {
+      if (status != null && status.isNotEmpty && status != 'all') {
         query['status'] = status;
       }
 
       if (organizationId != null) {
         query['organizationId'] = organizationId;
+      }
+
+      if (branchId != null) {
+        query['branchId'] = branchId;
       }
 
       if (search != null && search.trim().isNotEmpty) {
@@ -464,13 +471,13 @@ class AuthService {
 
       if (data is! Map<String, dynamic> ||
           data['success'] != true ||
-          data['devices'] is! List) {
+          data['devices'] is! List ||
+          data['pagination'] is! Map ||
+          data['statusCounts'] is! Map) {
         throw Exception('Invalid devices response.');
       }
 
-      return (data['devices'] as List)
-          .whereType<Map<String, dynamic>>()
-          .toList();
+      return data;
     } on DioException catch (e) {
       final data = e.response?.data;
 
@@ -484,6 +491,7 @@ class AuthService {
 
   Future<List<Map<String, dynamic>>> getBranches({
     required int organizationId,
+    bool activeOnly = true,
   }) async {
     try {
       final token = await getToken();
@@ -505,10 +513,17 @@ class AuthService {
         throw Exception('Invalid branches response.');
       }
 
-      return (data['branches'] as List)
+      final branchList = (data['branches'] as List)
           .whereType<Map<String, dynamic>>()
-          .where((branch) => branch['status'] == 'active')
           .toList();
+
+      if (activeOnly) {
+        return branchList
+            .where((branch) => branch['status'] == 'active')
+            .toList();
+      }
+
+      return branchList;
     } on DioException catch (e) {
       final data = e.response?.data;
 
