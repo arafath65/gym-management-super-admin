@@ -655,4 +655,274 @@ class AuthService {
       throw Exception(e.message ?? 'Unable to revoke device.');
     }
   }
+  // -------------------------------------------------------
+  // LICENSE MANAGEMENT
+  // -------------------------------------------------------
+
+  String _licenseApiError(DioException error, String fallback) {
+    final data = error.response?.data;
+    if (data is Map<String, dynamic> && data['message'] != null) {
+      return data['message'].toString();
+    }
+    return error.message ?? fallback;
+  }
+
+  Future<Map<String, dynamic>> getLicenses({
+    String? search,
+    String status = 'all',
+    String licenseType = 'all',
+    int? organizationId,
+    int page = 1,
+    int limit = 25,
+  }) async {
+    try {
+      final token = await getToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('Please sign in again.');
+      }
+
+      final query = <String, dynamic>{
+        'status': status,
+        'licenseType': licenseType,
+        'page': page,
+        'limit': limit,
+      };
+      if (search != null && search.trim().isNotEmpty) {
+        query['search'] = search.trim();
+      }
+      if (organizationId != null) {
+        query['organizationId'] = organizationId;
+      }
+
+      final response = await _dio.get(
+        '/licenses',
+        queryParameters: query,
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic> ||
+          data['success'] != true ||
+          data['licenses'] is! List ||
+          data['pagination'] is! Map ||
+          data['statusCounts'] is! Map) {
+        throw Exception('Invalid licenses response.');
+      }
+      return data;
+    } on DioException catch (e) {
+      throw Exception(_licenseApiError(e, 'Unable to load licenses.'));
+    }
+  }
+
+  Future<Map<String, dynamic>> getLicenseById({required int licenseId}) async {
+    try {
+      final token = await getToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('Please sign in again.');
+      }
+
+      final response = await _dio.get(
+        '/licenses/$licenseId',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic> ||
+          data['success'] != true ||
+          data['license'] is! Map ||
+          data['history'] is! List) {
+        throw Exception('Invalid license details response.');
+      }
+      return data;
+    } on DioException catch (e) {
+      throw Exception(_licenseApiError(e, 'Unable to load license details.'));
+    }
+  }
+
+  Future<Map<String, dynamic>> createLicense({
+    required int organizationId,
+    required String licenseType,
+    required int maxDevices,
+    int? trialDays,
+    String? notes,
+  }) async {
+    try {
+      final token = await getToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('Please sign in again.');
+      }
+
+      final requestData = <String, dynamic>{
+        'organizationId': organizationId,
+        'licenseType': licenseType,
+        'maxDevices': maxDevices,
+        'notes': notes?.trim(),
+      };
+      if (trialDays != null) requestData['trialDays'] = trialDays;
+
+      final response = await _dio.post(
+        '/licenses',
+        data: requestData,
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic> ||
+          data['success'] != true ||
+          data['license'] is! Map) {
+        throw Exception(
+          data is Map<String, dynamic>
+              ? data['message']?.toString() ?? 'Unable to issue license.'
+              : 'Unexpected server response.',
+        );
+      }
+      return data;
+    } on DioException catch (e) {
+      throw Exception(_licenseApiError(e, 'Unable to issue license.'));
+    }
+  }
+
+  Future<Map<String, dynamic>> renewLicense({
+    required int licenseId,
+    required String licenseType,
+    required int maxDevices,
+    int? trialDays,
+    String? notes,
+  }) async {
+    try {
+      final token = await getToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('Please sign in again.');
+      }
+
+      final requestData = <String, dynamic>{
+        'licenseType': licenseType,
+        'maxDevices': maxDevices,
+        'notes': notes?.trim(),
+      };
+      if (trialDays != null) requestData['trialDays'] = trialDays;
+
+      final response = await _dio.post(
+        '/licenses/$licenseId/renew',
+        data: requestData,
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic> ||
+          data['success'] != true ||
+          data['license'] is! Map) {
+        throw Exception(
+          data is Map<String, dynamic>
+              ? data['message']?.toString() ?? 'Unable to renew license.'
+              : 'Unexpected server response.',
+        );
+      }
+      return data;
+    } on DioException catch (e) {
+      throw Exception(_licenseApiError(e, 'Unable to renew license.'));
+    }
+  }
+
+  Future<Map<String, dynamic>> updateLicenseStatus({
+    required int licenseId,
+    required String status,
+  }) async {
+    try {
+      if (!['active', 'suspended', 'expired'].contains(status)) {
+        throw Exception('Invalid license status.');
+      }
+      final token = await getToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('Please sign in again.');
+      }
+
+      final response = await _dio.patch(
+        '/licenses/$licenseId/status',
+        data: {'status': status},
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic> ||
+          data['success'] != true ||
+          data['license'] is! Map) {
+        throw Exception(
+          data is Map<String, dynamic>
+              ? data['message']?.toString() ??
+                    'Unable to update license status.'
+              : 'Unexpected server response.',
+        );
+      }
+      return data;
+    } on DioException catch (e) {
+      throw Exception(_licenseApiError(e, 'Unable to update license status.'));
+    }
+  }
+
+  // -------------------------------------------------------
+  // PLATFORM AUDIT LOGS (READ ONLY)
+  // -------------------------------------------------------
+
+  Future<Map<String, dynamic>> getPlatformAuditLogs({
+    String? search,
+    String? action,
+    String? entityType,
+    String? fromDate,
+    String? toDate,
+    int? organizationId,
+    int? platformAdminId,
+    int page = 1,
+    int limit = 25,
+  }) async {
+    try {
+      final token = await getToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('Please sign in again.');
+      }
+
+      final query = <String, dynamic>{'page': page, 'limit': limit};
+
+      if (search != null && search.trim().isNotEmpty) {
+        query['search'] = search.trim();
+      }
+      if (action != null && action.isNotEmpty && action != 'all') {
+        query['action'] = action;
+      }
+      if (entityType != null && entityType.isNotEmpty && entityType != 'all') {
+        query['entityType'] = entityType;
+      }
+      if (fromDate != null && fromDate.isNotEmpty) {
+        query['fromDate'] = fromDate;
+      }
+      if (toDate != null && toDate.isNotEmpty) {
+        query['toDate'] = toDate;
+      }
+      if (organizationId != null) {
+        query['organizationId'] = organizationId;
+      }
+      if (platformAdminId != null) {
+        query['platformAdminId'] = platformAdminId;
+      }
+
+      final response = await _dio.get(
+        '/platform-admin/audit-logs',
+        queryParameters: query,
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+
+      final data = response.data;
+      if (data is! Map<String, dynamic> ||
+          data['success'] != true ||
+          data['auditLogs'] is! List ||
+          data['pagination'] is! Map ||
+          data['actions'] is! List ||
+          data['entityTypes'] is! List) {
+        throw Exception('Invalid platform audit logs response.');
+      }
+
+      return data;
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map<String, dynamic> && data['message'] != null) {
+        throw Exception(data['message'].toString());
+      }
+      throw Exception(e.message ?? 'Unable to load platform audit logs.');
+    }
+  }
 }

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/services/auth_service.dart';
 import '../organizations/organizations_screen.dart';
 import '../devices/device_management_screen.dart';
+import '../audit_logs/audit_logs_screen.dart';
+import '../licenses/license_management_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key, required this.adminName});
@@ -253,13 +255,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 icon: Icons.card_membership,
                 title: 'License Management',
                 subtitle: 'Manage subscriptions and license status',
-                onTap: () {},
+                onTap: () async {
+                  await Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const LicenseManagementScreen(),
+                    ),
+                  );
+
+                  if (!mounted) return;
+                  _loadActiveDevices();
+                },
               ),
               _MenuTile(
                 icon: Icons.history,
                 title: 'Audit Logs',
                 subtitle: 'Review platform activity',
-                onTap: () {},
+                onTap: () async {
+                  await Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const AuditLogsScreen(),
+                    ),
+                  );
+                },
               ),
             ],
           ),
