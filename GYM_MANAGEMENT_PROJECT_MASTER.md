@@ -1,7 +1,7 @@
 # GYM MANAGEMENT PROJECT MASTER
 
 **Technical handover and continuation reference**  
-**Last updated:** 10 November 2026 (customer onboarding / branch and staff schema update)  
+**Last updated:** 11 November 2026 (customer onboarding / branch and staff schema update)  
 **Project owner / development context:** Innovex Fitness Center / Innovex Web Solutions  
 **Primary development environment:** Windows laptop, PowerShell, Flutter, Node.js and MySQL 8. The latest active workstation is the home laptop; see Section 21 for its project paths.
 
@@ -1609,6 +1609,161 @@ The immediate onboarding foundation is now ordered as follows:
 - Gym App repo latest confirmed commit remains `8981e1e`.
 - No application source code was changed during this inspection/documentation update.
 - This updated master document must now be copied into the Super Admin repo, reviewed, committed as a single file and pushed. Do not stage backups or unrelated files.
+
+---
+
+## 28. Platform Admin Permission Enforcement and Branch API Milestone — 11 November 2026
+
+This section records the latest implemented and tested API changes on the home laptop. It supersedes earlier statements in Sections 27.1, 27.4, 27.7 and 27.8 wherever they said Platform Admin permission enforcement was still absent or the Branch API only supported listing/creation. The historical inspection findings remain useful as a record of what was true before this milestone.
+
+### 28.1 Platform Admin permission assignment verified
+
+The user created and verified the dedicated Platform Admin RBAC tables:
+
+- `platform_permissions`
+- `platform_roles`
+- `platform_admin_roles`
+- `platform_role_permissions`
+
+The existing active Platform Admin account was confirmed as ID `1`, MMM Arafath (`arafath65@gmail.com`). The database verification query returned the `Super Admin` role (role ID `1`) with **19 permissions** assigned.
+
+The 19 permission keys seeded and assigned are:
+
+- `dashboard.view`
+- `organizations.view`, `organizations.create`, `organizations.update`, `organizations.suspend`
+- `branches.view`, `branches.create`, `branches.update`, `branches.delete`
+- `devices.view`, `devices.register`, `devices.activation_code.regenerate`, `devices.revoke`
+- `licenses.view`, `licenses.create`, `licenses.renew`, `licenses.activate`, `licenses.suspend`
+- `audit_logs.view`
+
+The device-activation route remains a Gym App/device endpoint and is not guarded by a Platform Admin permission.
+
+### 28.2 Platform Admin middleware and protected routes updated
+
+The following API files were modified locally:
+
+- `src/middleware/platformAdminMiddleware.js`
+- `src/routes/branchRoutes.js`
+- `src/controllers/branchController.js`
+- `src/routes/organizationRoutes.js`
+- `src/routes/deviceRoutes.js`
+- `src/routes/licenseRoutes.js`
+- `src/routes/platformAdminRoutes.js`
+
+The middleware now loads current permission keys from the four Platform Admin RBAC tables for the authenticated active Platform Admin and attaches them to `req.platformAdmin.permissions`. It exports `requirePlatformPermission(...)` for route-level authorization. Permission assignments are read from the database on each authenticated request rather than trusted from JWT claims.
+
+Permission mappings applied to the existing Super Admin API routes:
+
+| Route/action | Required permission |
+|---|---|
+| GET organizations | `organizations.view` |
+| POST organizations | `organizations.create` |
+| PUT organization | `organizations.update` |
+| Set organization status | `organizations.suspend` |
+| GET branches | `branches.view` |
+| POST branch | `branches.create` |
+| PATCH branch details | `branches.update` |
+| PATCH branch status | `branches.update` |
+| GET devices | `devices.view` |
+| POST device registration | `devices.register` |
+| Regenerate activation code | `devices.activation_code.regenerate` |
+| Revoke device | `devices.revoke` |
+| GET licenses / license detail | `licenses.view` |
+| POST license | `licenses.create` |
+| Renew license | `licenses.renew` |
+| Activate license status | `licenses.activate` |
+| Other license status change (including suspend) | `licenses.suspend` |
+| Dashboard statistics | `dashboard.view` |
+| Platform audit logs | `audit_logs.view` |
+
+The dynamic license-status route maps `status === 'active'` to `licenses.activate`; other supplied states are routed through `licenses.suspend`. The license controller remains responsible for validating the allowed status values.
+
+### 28.3 Branch API expanded and hardened
+
+`src/routes/branchRoutes.js` now requires `authenticatePlatformAdmin` for every branch route and applies permission middleware. Implemented endpoints:
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| GET | `/api/branches/:organizationId` | `branches.view` | List organization branches |
+| POST | `/api/branches/:organizationId` | `branches.create` | Create branch |
+| PATCH | `/api/branches/:organizationId/:branchId` | `branches.update` | Edit branch fields |
+| PATCH | `/api/branches/:organizationId/:branchId/status` | `branches.update` | Activate/deactivate branch |
+
+Branch status changes are soft deactivation/reactivation (`active` / `inactive`). Physical branch deletion is deliberately not implemented, to preserve records and avoid breaking references. Branch creation, updates and status changes use a DB transaction and write `platform_audit_logs` using the same transaction connection. An audit write failure prevents the mutation from committing.
+
+Branch update supports the fields `name`, `branch_code`, `phone` and `address`, checks organization/branch ownership, validates inputs and enforces branch-code uniqueness per organization. Editing an inactive branch is rejected until it is reactivated.
+
+### 28.4 API syntax and authentication tests completed
+
+The user ran `node --check` for all seven modified API files. No syntax errors were printed. `git diff --check` returned no whitespace errors; Git only printed normal LF-to-CRLF working-copy warnings on Windows.
+
+Anonymous GET tests were run against:
+
+- `/api/branches/1`
+- `/api/organizations`
+- `/api/devices`
+- `/api/licenses`
+- `/api/platform-admin/dashboard-stats`
+- `/api/platform-admin/audit-logs`
+
+All six returned **HTTP 401**, as expected without a Bearer token.
+
+The user then authenticated as the active Platform Admin account (credentials were entered privately in PowerShell; never record passwords or JWTs in this document). Authenticated access returned **HTTP 200** for:
+
+- Organization list (`/api/organizations`)
+- Branch list for organization ID `3`
+- Device list
+- License list
+- Dashboard statistics
+- Platform audit logs
+
+This verifies the positive Super Admin path. A negative test using a second/no-branch-create permission role has **not yet been run**; do not claim per-permission denial is fully tested until that test is complete.
+
+### 28.5 Power World branch tests completed
+
+The authenticated Super Admin created Power World's first branch:
+
+| Field | Verified value |
+|---|---|
+| Organization | Power World |
+| Organization ID | `3` |
+| Branch ID | `3` |
+| Branch name | Wellampitiya |
+| Branch code | `PWG-MAIN-001` |
+| Phone | `+94753369680` |
+| Address | `38, Awissavella Road, Wellampitiya, Colombo 10` |
+| Final status | `active` |
+
+Audit verification found:
+
+| Audit ID | Action | Entity | Entity ID | Description |
+|---:|---|---|---:|---|
+| 10 | `BRANCH_CREATED` | branch | 3 | Created branch Wellampitiya for Power World |
+| 11 | `BRANCH_UPDATED` | branch | 3 | Updated branch Wellampitiya |
+| 12 | `BRANCH_DEACTIVATED` | branch | 3 | Deactivated branch Wellampitiya |
+| 13 | `BRANCH_REACTIVATED` | branch | 3 | Reactivated branch Wellampitiya |
+
+The user also confirmed successful branch update, deactivation and reactivation API responses. The final branch state is `active`. All three corresponding audit records (IDs 11–13) were found; the branch-created audit record (ID 10) was separately verified.
+
+### 28.6 Current API working-tree state
+
+The seven files listed in Section 28.2 are modified locally and have passed syntax/diff checks. The user has **not yet committed or pushed these API changes**. Keep this separate from the Super Admin master-document repository. Do not use `git add .`; stage only intended API source files after further verification.
+
+### 28.7 Remaining verification and immediate next work
+
+1. Run a negative authorization test using a temporary Platform Admin role that lacks a selected permission (for example, lacks `branches.create`) and verify HTTP 403 with `PLATFORM_PERMISSION_DENIED`. Ensure the test role/account is removed or restored safely afterward; do not weaken the existing Super Admin account.
+2. Inspect the latest actual API files and verify middleware/route mappings for every endpoint, including validation of invalid license status values and permission coverage for all mutations.
+3. Build the Flutter Super Admin Branch Management screen. Add authenticated `AuthService` methods for branch create, update and status change; the existing `getBranches` method already exists. Add organization selection, branch listing, search/status filters, create/edit forms and soft activate/deactivate controls.
+4. Add permission-aware UI only after the API returns the authenticated admin's effective permissions; backend middleware remains authoritative.
+5. Test Branch Management UI against the real Power World branch ID `3` and verify audit history remains visible.
+6. Update this master document and push the API and Super Admin repositories independently after their respective milestones are validated.
+7. Continue Gym Owner invitation/user/role provisioning, Gym App device activation audit and the one-device/two-pending-tablet quota test after the branch-management milestone. Do not start membership modules before the current onboarding/device-security foundations are complete.
+
+### 28.8 Exact continuation point
+
+**The next task is to build the Flutter Super Admin Branch Management feature**, after completing a negative per-permission authorization test. The API Branch endpoints for listing, creation, editing and soft activation/deactivation have been implemented and positively tested against Power World. Power World organization ID `3` has branch ID `3` (`Wellampitiya`, `PWG-MAIN-001`), currently active. Its branch audit trail contains IDs `10` through `13` as listed above.
+
+The existing one-device/two-pending-tablet test organization remains a separate outstanding device-quota test. Do not confuse it with Power World's branch test or claim that device activation quota behavior has passed.
 
 ---
 
