@@ -1,7 +1,7 @@
 # GYM MANAGEMENT PROJECT MASTER
 
 **Technical handover and continuation reference**  
-**Last updated:** 10 November 2026  
+**Last updated:** 10 November 2026 (customer onboarding / branch and staff schema update)  
 **Project owner / development context:** Innovex Fitness Center / Innovex Web Solutions  
 **Primary development environment:** Windows laptop, PowerShell, Flutter, Node.js and MySQL 8. The latest active workstation is the home laptop; see Section 21 for its project paths.
 
@@ -27,7 +27,7 @@ The intended product scope includes:
 
 ### Current product boundary
 
-The platform-management foundation is substantially further along than the day-to-day gym operations application. The Super Admin Flutter app and the Node API already have organization, device and license management. The audit-log read screen has been added but still requires final lint/runtime verification. Membership, payments, programs, enrollments and fitness progress are product requirements, not confirmed completed modules in the current Flutter/API codebase.
+The platform-management foundation is substantially further along than the day-to-day gym operations application. The Super Admin Flutter app and the Node API already have organization, device and license management; branch management is only a basic unauthenticated API, while Gym Staff users/roles and first-owner provisioning remain unimplemented. The audit-log read screen has been added but still requires final lint/runtime verification. Membership, payments, programs, enrollments and fitness progress are product requirements, not confirmed completed modules in the current Flutter/API codebase.
 
 The original design considered an organization/tenant with multiple branches. The user later said full multi-tenant complexity could be deferred initially while branch-wise operations remained necessary. The implemented platform layer nevertheless has an `organizations` boundary, organization-owned branches, licenses and devices. The current state is therefore organization-scoped at the platform/device/license level; do not assume all future operational data APIs are already tenant-isolated.
 
@@ -565,7 +565,7 @@ The current database's numeric IDs should be read from MySQL rather than assumed
 
 ## 7. Authentication and Authorization
 
-### Platform administrator authentication (implemented; permission authorization not implemented)
+### Platform administrator authentication (implemented; Platform Admin RBAC tables and initial assignment created; enforcement pending)
 
 - Login endpoint: `POST /api/platform-admin/login`.
 - Password hashes are stored in `platform_admins.password_hash` and checked with bcrypt.
@@ -574,7 +574,7 @@ The current database's numeric IDs should be read from MySQL rather than assumed
 - Middleware sets `req.platformAdmin = { id, email }`.
 - Flutter `AuthService` stores the token in `FlutterSecureStorage` with key `platform_admin_token`; authenticated Dio requests send the Bearer token.
 
-**Important verified gap:** the current Platform Admin middleware authenticates identity and active status only. It does not load an assigned Platform Admin role or check a permission key for each route/action. Platform Admin login also updates `last_login_at`, but the inspected `loginPlatformAdmin` controller does not write a platform audit event for successful or failed login attempts.
+**Important verified gap:** Platform Admin RBAC database tables and the initial Super Admin assignment now exist (details in Section 26), but the current Platform Admin middleware still authenticates identity and active status only. It does not load the assigned role's permissions or check a permission key for each route/action. Platform Admin login also updates `last_login_at`, but the inspected `loginPlatformAdmin` controller does not write a platform audit event for successful or failed login attempts.
 
 ### Gym staff authorization (schema exists; runtime enforcement not yet verified)
 
@@ -582,9 +582,9 @@ The current `roles`, `permissions`, `role_permissions` and `user_roles` structur
 
 For both applications, the backend must be the security boundary: every protected API operation must check the acting user's effective permission and organization/branch scope. Flutter should hide or disable unavailable actions for usability, but UI checks must never replace backend checks.
 
-### Required authorization architecture decision
+### Platform Admin RBAC (database structure created; middleware enforcement pending)
 
-Platform Admins need a dedicated role/permission assignment model because `platform_admins` currently has no role relationship and Gym `user_roles` references the organization `users` table. Keep Platform Admin RBAC separate from Gym Staff RBAC unless a future schema design explicitly supports both safely. Do not grant permissions merely because a JWT contains `role: "platform_admin"`.
+Platform Admins use a dedicated role/permission model separate from organization-scoped Gym Staff RBAC. Tables created in MySQL: `platform_permissions`, `platform_roles`, `platform_admin_roles` and `platform_role_permissions`. The initial `Super Admin` role has been assigned to active Platform Admin ID `1` (MMM Arafath) with 19 permissions. The API middleware must still load and enforce these permissions per route/action. Never grant a request access solely because its JWT contains `role: "platform_admin"`.
 
 ---
 
@@ -614,20 +614,20 @@ Organization creation details:
 
 Organization status and license status are separate concepts. An organization can be active while its license is expired/suspended; device activation is still gated by the license check.
 
-### Branch management (implemented, access hardening needed)
+### Branch management (basic API exists; incomplete and currently unauthenticated)
 
-Controller: `branchController.js`. Routes:
+Controller: `branchController.js`. Current routes:
 
-- `GET /api/branches/:organizationId`
-- `POST /api/branches/:organizationId`
+- `GET /api/branches/:organizationId` — list branches.
+- `POST /api/branches/:organizationId` — create a branch.
 
-The inspected `branchRoutes.js` did **not** include `authenticatePlatformAdmin` middleware, unlike organization routes. Treat this as a confirmed security hardening task before production: validate whether these routes should be protected by platform-admin authentication now and later use organization/branch authorization for tenant-side access. Do not expose unrestricted branch data to the public unintentionally.
+The latest source inspection confirmed that `branchRoutes.js` applies **no authentication or permission middleware**. The controller performs direct queries/inserts, has no transaction-backed platform audit write, and exposes no update/status-change/delete API. Route mounting is `app.use("/api/branches", branchRoutes)` in `server.js`. These routes must be secured before the Super Admin branch screen is connected. Platform Admin calls need `authenticatePlatformAdmin` plus permission checks; later Gym Staff branch management must use Gym authentication, permission checks and organization/branch scoping rather than reusing a Platform Admin identity.
 
-Branch create requires `name` and `branch_code`; branch code is uppercased and duplicate codes for the same organization return HTTP 409. Phone/address are optional.
+Branch creation requires `name` and `branch_code`; branch code is uppercased and uniqueness is scoped to `organization_id`. Phone/address are optional. For normal lifecycle management, prefer marking a branch inactive rather than hard-deleting it: registered devices reference branches with `ON DELETE RESTRICT`, and user branch assignments have their own FK/cascade semantics.
 
-### User management
+### Gym Staff user management and first Gym Owner provisioning (not implemented)
 
-The `users` table and role association tables are in the database design inventory, but a complete user CRUD UI/API implementation was not verified in the latest conversation. This section remains pending beyond the platform-admin user account.
+The `users` table and role/branch association tables exist, but the latest source inspection found no user/role/auth route or controller files and no matching user-creation, invitation or role-assignment endpoints. The Super Admin Flutter feature list contains no Gym Users or Roles screens. First-time Gym Owner provisioning is therefore still missing. Design a secure invitation flow so the owner sets their own password; do not use a shared/default password. The owner is a Gym Staff user in the tenant, not a Platform Admin.
 
 ---
 
@@ -643,7 +643,7 @@ The user supplied these `SHOW CREATE TABLE` definitions from the current MySQL d
 - `user_roles`: `organization_id`, `user_id`, `role_id`; composite FKs ensure both the user and role belong to the same organization.
 - `platform_admins` has no role/permission assignment columns or related table in the supplied table inventory.
 
-These relationships confirm that the existing role tables are designed for organization-scoped Gym Staff users, not Platform Admins. The current Gym Staff permission-checking middleware and complete API enforcement coverage have not yet been demonstrated.
+These relationships confirm that the existing role tables are designed for organization-scoped Gym Staff users, not Platform Admins. The current Gym Staff permission-checking middleware and complete API enforcement coverage have not yet been demonstrated. Platform Admin RBAC has now been separately created; see Section 26.
 
 ### Permission catalog observed in MySQL
 
@@ -673,12 +673,12 @@ The user supplied the current rows from `permissions` (IDs 1–21):
 | 20 | `licenses.activate` | Licenses |
 | 21 | `licenses.suspend` | Licenses |
 
-The observed catalog does not include device-specific permission keys. It must not be assumed that these 21 rows are currently assigned to Platform Admins. Device permissions and Platform Admin permission assignment remain design/implementation work.
+The observed 21-row catalog belongs to the Gym Staff permission system. It does not include device-specific keys and must not be treated as the Platform Admin catalog. A separate `platform_permissions` catalog has been seeded with 19 initial Platform Admin permissions, including device permissions; see Section 26.
 
 ### Mandatory authorization rule for the whole product
 
 - Every meaningful mutation and protected read must be authorized by the backend against the actor's assigned role/permissions and organization/branch scope.
-- Super Admin routes need a dedicated Platform Admin role/permission mapping and a permission middleware (for example, distinct view/create/update/suspend/activate/revoke actions); the final schema/key names must be decided before implementation.
+- Super Admin routes must enforce the newly created Platform Admin RBAC tables using permission middleware (distinct view/create/update/suspend/activate/revoke actions); the schema and initial 19 permissions are created, but middleware/route enforcement remains to be implemented.
 - Gym Staff routes must use the organization-scoped role assignment (`user_roles`) and enforce branch access as well as permission keys.
 - Flutter permission-aware visibility/disablement is required for good UX, but is never the security boundary.
 - Permission changes, role assignment/removal and denied security-sensitive operations must have appropriate audit/security history.
@@ -1251,19 +1251,23 @@ Response keys: `success`, `auditLogs`, `pagination`, `actions`, `entityTypes`, `
 | Area | Status | Evidence / qualification |
 |---|---|---|
 | API repository | **Pushed and clean in latest home-laptop check** | API commits `908d5af` and `78de952`; pull was already up to date and no working-tree changes were reported |
-| Super Admin Flutter repository | **Pushed and clean in latest home-laptop check** | Pulled through `a1fe13f` (`Add license and audit management screens`); local status clean |
+| Super Admin Flutter repository | **Pushed and clean in latest reported check** | Latest commit `4e50ec3` (`Update gym management project master handover`), pushed successfully after `a1fe13f` |
 | Gym App Flutter repository | **Initial scaffold pushed and clean** | Commit `8981e1e`; pull already up to date |
 | Platform Admin login/JWT | **Implemented** | Login controller and active-account middleware inspected |
-| Platform Admin permission enforcement | **Missing / required** | Current middleware authenticates identity and active status only; no Platform Admin roles/permission mapping or per-action checks were found |
-| Gym Staff roles/permission schema | **DDL confirmed; enforcement unverified** | `roles`, `permissions`, `role_permissions`, `user_roles` are organization-scoped to Gym users |
+| Platform Admin RBAC database | **Created and seeded** | `platform_permissions`, `platform_roles`, `platform_admin_roles`, `platform_role_permissions`; Super Admin assigned to admin ID 1 with 19 permissions |
+| Platform Admin permission enforcement | **Missing / required** | Middleware still authenticates only; no per-action permission checks are wired to routes |
+| Gym Staff roles/permission schema | **DDL confirmed; enforcement unverified** | `roles`, `permissions`, `role_permissions`, `user_roles`, `user_branch_access` are organization-scoped to Gym users |
 | Organization management | **Implemented and used** | User created a new organization in the Super Admin app during current quota-test setup |
+| Super Admin branch screen | **Missing** | Branch API exists only for GET/create; no branch feature screen or create method in `AuthService` |
+| Gym User / Role screens and APIs | **Missing** | No user/role route/controller files or matching endpoints found in source inspection |
+| Initial Gym Owner provisioning | **Missing** | No secure invitation, password setup, user creation or initial role/branch assignment flow verified |
 | License management | **Working per user** | Previous license issue/renewal/status flow and history tested; current test organization was created with device limit 1 |
 | Device registration screen/API | **Working for current test setup** | User registered two tablets for the one-device organization; both are pending |
 | Maximum-device activation test | **Pending — exact next test** | Need activate first pending tablet and verify second is rejected with `DEVICE_LIMIT_REACHED` |
 | Device activation API | **Implemented; activation audit gap** | Activation controller enforces current active-device quota but does not write an audit record |
 | Device registration/regenerate/revoke audit | **Platform audit integrated** | Management controller writes platform audit events in the mutation transaction |
 | Operational `audit_logs` schema | **DDL confirmed; needs extension/design** | Existing table has org/branch/user/action/entity/description/network metadata; no actor type/identifier or old/new JSON columns |
-| Platform audit read UI/API | **Implemented and pushed** | Super Admin commit `a1fe13f`; live behavior should be retested as needed |
+| Platform audit read UI/API | **Implemented and pushed** | Super Admin feature baseline was `a1fe13f`; master handover update subsequently pushed in `4e50ec3`; live behavior should be retested as needed |
 | Gym App login/device onboarding | **Not implemented yet** | Current Gym App has splash and a mock login placeholder; no real backend login or activation UI was verified |
 | Member/membership/payment/program/progress modules | **Not started / requirements captured** | Do not begin until current device activation/quota workflow is completed |
 
@@ -1333,12 +1337,15 @@ Gym App commit:      8981e1e
 The next implementation sequence is:
 
 1. Inspect the current API and Super Admin source again before edits (home-laptop repositories are pulled and clean in the latest reported status).
-2. Implement Platform Admin permission authorization using a dedicated Platform Admin RBAC relationship. Do not repurpose Gym Staff `user_roles` for Platform Admins.
-3. Add the missing operational audit fields/model and make `activateDevice` write a device-originated audit entry in the same DB transaction as activation. Add login/security audit handling. Ensure current register/regenerate/revoke audits remain intact.
-4. Build the Gym App device activation/onboarding screen and API service using the existing Flutter packages. The flow must collect/use the organization ID, stable device UUID and one-time activation code, then securely persist the returned device token. Do not display/store plaintext activation codes or device tokens in logs.
-5. With the current one-device license and two pending tablet registrations, activate Tablet A. Confirm it becomes active. Then activate Tablet B and confirm the expected `403 DEVICE_LIMIT_REACHED` response is shown clearly in the app.
-6. Revoke Tablet A through the Super Admin app. Retry Tablet B only if its activation code is still within its 24-hour validity window; otherwise regenerate it from Super Admin first. Confirm the new activation succeeds and audit entries exist for each operation.
-7. Verify the Super Admin Audit Logs screen shows the registration/regeneration/revocation events and the operational audit view/storage contains the device activation event.
+2. Implement Platform Admin permission middleware using the created `platform_permissions`/`platform_roles`/assignment tables, then apply explicit permission checks to every protected Super Admin route.
+3. Secure and complete the Branch API: Platform Admin authentication + `branches.view`/`branches.create` checks, input validation, transaction-backed audit writes, and branch status management. Avoid hard deletion where device/user relationships should be preserved.
+4. Build the Super Admin Branch Management screen and add the missing branch API methods to `AuthService`.
+5. Design Gym Staff authentication and secure Gym Owner invitation/password setup. Provision the initial owner under the correct organization, assign the system Gym Admin role and initial branch access, and audit the entire provisioning process.
+6. Add Gym User Management and Role & Permission Management APIs/screens. Use organization-scoped `roles`, `permissions`, `role_permissions`, `user_roles` and `user_branch_access`; backend checks must enforce both permissions and branch scope.
+7. Extend or otherwise correctly model operational audit events so device-originated actions can carry an accurate actor type/identifier and before/after values. Add transactional audit logging to `activateDevice` and platform login/security events.
+8. Build the Gym App device activation/onboarding screen and API service using the existing Flutter packages. Use organization identity, stable device UUID and one-time activation code; securely persist the returned device token. Never log activation codes or plaintext device tokens.
+9. Complete the live one-device/two-pending-tablet quota test: activate Tablet A, verify Tablet B is blocked with `403 DEVICE_LIMIT_REACHED`, revoke Tablet A, regenerate Tablet B's code if needed, then retry and verify success.
+10. Verify platform and operational audit history for each relevant action before proceeding to member/membership features.
 
 ### Current test facts — do not lose these
 
@@ -1358,7 +1365,7 @@ The next implementation sequence is:
 Continue on the **home laptop**. The three repositories were pulled/checked on the home laptop. Latest reported status was clean for all three:
 
 - API: `908d5af` and `78de952`; `git pull --ff-only origin main` reported already up to date.
-- Super Admin: pulled through `a1fe13f`; `git pull --ff-only origin main` fast-forwarded to that commit and local status was clean.
+- Super Admin: initially pulled through `a1fe13f`; master document update was subsequently committed and pushed as `4e50ec3`. The latest source inspection showed an otherwise clean working tree before this new document update.
 - Gym App: `8981e1e`; pull reported already up to date and local status was clean.
 
 The Super Admin app is now being used to create an organization and register its tablets. One new test organization has a device limit of 1, and two tablets are currently pending. Continue from that exact state.
@@ -1368,7 +1375,7 @@ The Super Admin app is now being used to create an organization and register its
 - Do not switch back to the office laptop context; current local paths are under `D:\Personal\INNOVEX WEB\Flutter Projects`.
 - Do not jump into membership or payment modules before finishing the device quota test.
 - Backend permission checks and audit history are mandatory for every meaningful action in both apps.
-- Do not confuse Gym Staff RBAC (`roles` scoped to `organization_id`, assigned through `user_roles`) with Platform Admin RBAC; Platform Admin permission mapping is currently absent.
+- Keep Gym Staff RBAC (`roles` scoped to `organization_id`, assigned through `user_roles`) separate from Platform Admin RBAC (`platform_roles`/`platform_admin_roles`); Platform Admin tables and the initial 19-permission Super Admin assignment exist, but API enforcement is still pending.
 - Activation must be audited as a device/app-originated action, not attributed to a Platform Admin.
 - Preserve one-time activation code and device token secrecy; store the device token securely in the app and store only its hash in MySQL.
 - Use the DB transaction for both the mutation and its required audit write.
@@ -1398,10 +1405,10 @@ The three projects are separate Git repositories; each must be committed and pus
 | Project | GitHub remote | Latest confirmed commit | Latest home-laptop status |
 |---|---|---|---|
 | API | `https://github.com/arafath65/gym-management-api.git` | `78de952` — Add API source backup snapshots; preceding `908d5af` — Add license and audit management APIs | Pulled; `git pull --ff-only origin main` reported already up to date; working tree clean in latest reported check |
-| Super Admin Flutter | `https://github.com/arafath65/gym-management-super-admin.git` | `a1fe13f` — Add license and audit management screens | Fast-forwarded to `a1fe13f`; working tree clean in latest reported check |
+| Super Admin Flutter | `https://github.com/arafath65/gym-management-super-admin.git` | `4e50ec3` — Update gym management project master handover (previous feature commit `a1fe13f`) | `4e50ec3` was pushed successfully; latest source inspection reported clean before this new documentation revision |
 | Gym App Flutter | `https://github.com/arafath65/gym-management-apps.git` | `8981e1e` — Initial commit: Gym Management Flutter App | Pull reported already up to date; working tree clean in latest reported check |
 
-The current master document update is a new local artifact created after that sync. It has **not** yet been copied into the Super Admin repository, committed or pushed. Use the exact PowerShell copy/stage/commit/push commands supplied with this file. Stage only `GYM_MANAGEMENT_PROJECT_MASTER.md`; do not stage unrelated files or backups.
+The previous master document revision was committed and pushed to the Super Admin repository in `4e50ec3`. This newer onboarding/source-inspection revision must now be copied into that repository, reviewed, committed as a single file and pushed. Stage only `GYM_MANAGEMENT_PROJECT_MASTER.md`; do not stage unrelated files or backups.
 
 ## 26. Latest Home-Laptop Update and Live Device Test State — 10 November 2026
 
@@ -1416,7 +1423,7 @@ This section supersedes the earlier “Exact Next Development Step” and histor
 - `user_roles` links organization-scoped role IDs to organization-scoped rows in `users`.
 - `permissions` contains the 21 permission keys listed in Section 9.
 - `role_permissions` maps the existing organization roles to global permission catalog rows.
-- Therefore, the current role system is for Gym Staff; a Platform Admin permission assignment model is not yet present.
+- Therefore, the existing `roles`/`user_roles` system is for Gym Staff. A separate Platform Admin RBAC model has been created and seeded; backend permission enforcement remains pending.
 - The full `platform_audit_logs` DDL pasted during this update was truncated in the chat output. Do not assume columns beyond those used by `writePlatformAuditLog` (`platform_admin_id`, `organization_id`, `action`, `entity_type`, `entity_id`, `description`, `old_values`, `new_values`, `ip_address`, `user_agent`, plus the table's timestamp as used by the read controller). Re-run `SHOW CREATE TABLE platform_audit_logs` if exact indexes/FKs/constraints are needed.
 
 **API behavior/source inspection**
@@ -1464,6 +1471,144 @@ This section supersedes the earlier “Exact Next Development Step” and histor
 ### Important: this is not yet a completed quota test
 
 The user has reported only the organization creation and two pending registrations. Do not state that the maximum-device limit has passed until the activation rejection and post-revocation retry have actually been observed.
+
+---
+
+**End of updated master handover document.**
+
+
+## 27. Customer Onboarding, Branch/Staff Provisioning and Latest Source Inspection — 10 November 2026
+
+This section is the latest verified update and supersedes older statements about the branch/user/role implementation status and Platform Admin RBAC schema. It records the actual code and database state supplied from the home laptop.
+
+### 27.1 Platform Admin RBAC database state
+
+The user executed the initial Platform Admin RBAC SQL and verified the following query result:
+
+| Platform Admin ID | Name | Email | Status | Role ID | Role | Permission count |
+|---:|---|---|---|---:|---|---:|
+| 1 | MMM Arafath | arafath65@gmail.com | active | 1 | Super Admin | 19 |
+
+Created tables:
+
+- `platform_permissions` — platform-specific permission catalog.
+- `platform_roles` — platform role definitions.
+- `platform_admin_roles` — Platform Admin-to-role assignment.
+- `platform_role_permissions` — role-to-platform-permission assignment.
+
+The initial `Super Admin` role is a system role and is assigned to Platform Admin ID `1`. It has all 19 currently seeded platform permissions. The initial catalog covers dashboard view; organization view/create/update/suspend; branch view/create/update/delete; device view/register/activation-code regeneration/revoke; license view/create/renew/activate/suspend; and audit-log view.
+
+**Important:** these tables and the initial assignment are database-ready, but the latest inspected `platformAdminMiddleware.js` still only verifies JWT identity and active account status. It does not query `platform_admin_roles` or `platform_role_permissions` or enforce permission keys. Do not describe Platform Admin RBAC as fully implemented until middleware and every route have been updated and tested.
+
+### 27.2 Confirmed `user_branch_access` structure
+
+The user supplied the `SHOW CREATE TABLE user_branch_access` result:
+
+- Columns: `organization_id` (required), `user_id` (required), `branch_id` (required).
+- Primary key: (`user_id`, `branch_id`) — a user cannot have a duplicate assignment to the same branch, but can be assigned to multiple branches.
+- Composite foreign key (`organization_id`, `branch_id`) references `branches` (`organization_id`, `id`) with `ON DELETE CASCADE`.
+- Composite foreign key (`organization_id`, `user_id`) references `users` (`organization_id`, `id`) with `ON DELETE CASCADE`.
+
+This is the database mechanism for assigning a Gym Staff user to one or multiple branches inside the same organization. It prevents a user from being linked to a branch belonging to another organization. Backend authorization must still check the current user's allowed branches on every branch-scoped request; the FK alone is not runtime authorization.
+
+### 27.3 Confirmed branch and user table details
+
+`branches` table (DDL supplied):
+
+- `id`, `organization_id`, `name`, `branch_code`, optional `phone` and `address`, `status` (`active`/`inactive`), `created_at`, `updated_at`.
+- Branch code unique within an organization (`organization_id`, `branch_code`).
+- Composite unique key (`organization_id`, `id`) supports organization-safe foreign keys.
+- Organization FK uses `ON DELETE RESTRICT`.
+
+`users` table (DDL supplied):
+
+- `id`, `organization_id`, `full_name`, `email`, optional `phone`, required `password_hash`, `status` (`active`/`inactive`/`locked`), `last_login_at`, `created_at`, `updated_at`.
+- Email is unique within an organization (`organization_id`, `email`).
+- Composite unique key (`organization_id`, `id`) supports organization-safe references.
+- Organization FK uses `ON DELETE RESTRICT`.
+
+The required `password_hash` means a first-owner invitation must be designed carefully. Do not create a usable account with a shared/default password. Use a one-time, expiring invitation token stored as a hash, and let the invited owner set their own password before the account becomes active (exact invitation table/API flow remains to be designed).
+
+### 27.4 Latest API source inspection
+
+Home laptop API path:
+
+`D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_api`
+
+Confirmed from the actual command output:
+
+- `src/middleware/platformAdminMiddleware.js` authenticates a Platform Admin JWT and checks that the account is active, but has no permission-check middleware.
+- `src/routes/branchRoutes.js` declares only `GET /:organizationId` and `POST /:organizationId`; neither route has authentication or permission middleware.
+- `src/controllers/branchController.js` implements only `getBranches` and `createBranch`.
+- `getBranches` queries branches by the supplied organization ID.
+- `createBranch` validates organization ID, name and branch code; checks organization existence and duplicate code; inserts a branch with a direct DB query.
+- Branch creation currently has no DB transaction, no `writePlatformAuditLog` call, no before/after audit values, and no update/status/deactivate endpoint.
+- `server.js` mounts the branch router at `/api/branches`.
+- No user, role, permission or auth route/controller files were found in `src/routes` and `src/controllers` by the supplied filename search. The source search for user creation/invitation/role assignment patterns returned no results.
+- API `git status --short` produced no entries at inspection time (working tree clean).
+
+### 27.5 Latest Super Admin Flutter source inspection
+
+Home laptop Super Admin path:
+
+`D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_super_admin`
+
+Confirmed feature screens:
+
+- `lib/features/auth/login_screen.dart`
+- `lib/features/dashboard/dashboard_screen.dart`
+- `lib/features/organizations/organizations_screen.dart`
+- `lib/features/organizations/organization_edit_screen.dart`
+- `lib/features/devices/device_management_screen.dart`
+- `lib/features/licenses/license_management_screen.dart`
+- `lib/features/audit_logs/audit_logs_screen.dart`
+
+There are no Branches, Gym Users or Roles feature screens yet. The dashboard menu contains only Organizations, Device Management, License Management and Audit Logs.
+
+`AuthService` already includes `getBranches(organizationId, activeOnly)` which sends a Bearer token and reads the branch list. It does not yet include a branch creation/update API method or Gym User/Role management methods. The branch list helper is useful for selecting a branch in the existing device-registration UI, but it is not a Branch Management feature.
+
+The organization creation dialog currently provisions an organization and initial license together. It does not create the first branch or initial Gym Owner.
+
+Super Admin `git status --short` produced no entries at inspection time (working tree clean). Local backup files exist in the feature folders; do not stage or commit those backups.
+
+### 27.6 Agreed commercial onboarding model — Power World Gym example
+
+The product is intended to work as a multi-organization SaaS platform:
+
+1. Innovex Platform Admin creates a customer organization (tenant).
+2. Innovex issues/configures its license and maximum active-device count.
+3. Innovex creates the tenant's first branch.
+4. Innovex provisions/invites the initial Gym Owner as an organization-scoped `users` row, assigns the initial Gym Admin role and grants access to the first branch.
+5. The owner receives a secure invitation and sets their own password. No shared/default password is sent.
+6. Innovex registers the customer's physical tablets; each tablet receives a unique one-time activation code.
+7. The Gym App activates each tablet using its stable device UUID and activation code; the backend returns a one-time device token, which the app stores securely.
+8. The Gym Owner signs in with their own staff credentials, then creates Cashier/Receptionist users, assigns roles and branch access, and manages day-to-day gym operations.
+
+A device and a staff user are separate entities. A license's `max_devices` controls concurrent active physical devices, not the number of human staff accounts. Multiple authorized staff users can log in from a licensed tablet, subject to the session/concurrency policy that will be designed. Both tablets use the same Gym App and access the same organization/branch data; UI restrictions are not the security boundary.
+
+The backend must validate both device authorization and the authenticated staff user, then derive/check organization and branch scope from trusted server-side identity. It must not trust a client-supplied organization ID as proof of tenant access.
+
+### 27.7 Updated implementation sequence
+
+The immediate onboarding foundation is now ordered as follows:
+
+1. Implement `requirePlatformPermission(permissionKey)` using the newly created Platform Admin RBAC tables; add explicit permissions to all existing protected Super Admin routes. The existing admin ID `1` has the Super Admin role with 19 permission rows, but route enforcement remains absent.
+2. Secure branch routes with Platform Admin authentication and `branches.view` / `branches.create` checks. Add transactional Platform Admin audit writes for branch creation and later updates/status changes. Validate organization existence and branch ownership. Add branch status/deactivation API rather than relying on hard deletion.
+3. Build the Super Admin Branch Management screen and add create/list methods to `AuthService`; reuse existing `getBranches` where suitable after the route is secured.
+4. Design Gym Staff authentication plus first Gym Owner invitation/password setup. Add user creation, invitation token hashing/expiry/acceptance, initial system role assignment and `user_branch_access` assignment. Audit owner provisioning.
+5. Build Super Admin Gym User and Role management screens/APIs if Innovex needs support-side administration; the normal post-onboarding operation should allow the Gym Owner to manage their own staff within their organization/branch authority.
+6. Implement Gym Staff RBAC enforcement using `roles`, `permissions`, `role_permissions`, `user_roles` and `user_branch_access`; add branch-scope enforcement in every branch-bound API. Flutter UI should reflect permissions, but backend checks are mandatory.
+7. Complete device activation audit and the Gym App activation/onboarding screen. Device activation must be attributed to the device/app actor accurately, not to a Platform Admin. Never log activation codes or plaintext device tokens.
+8. Complete the existing one-device/two-pending-tablet quota test: first tablet activates, second is rejected with `DEVICE_LIMIT_REACHED`; revoke first; regenerate second's activation code if needed; activate the second; verify audit history.
+9. Only after onboarding/auth/device foundations are secure, continue with membership, payment, approvals, programs and progress modules.
+
+### 27.8 Latest repository state and document update
+
+- API repo latest confirmed commit remains `78de952`; source inspection showed a clean working tree.
+- Super Admin repo latest confirmed commit is `4e50ec3` (`Update gym management project master handover`), pushed successfully from `a1fe13f`.
+- Gym App repo latest confirmed commit remains `8981e1e`.
+- No application source code was changed during this inspection/documentation update.
+- This updated master document must now be copied into the Super Admin repo, reviewed, committed as a single file and pushed. Do not stage backups or unrelated files.
 
 ---
 
