@@ -1,7 +1,7 @@
 # GYM MANAGEMENT PROJECT MASTER
 
 **Technical handover and continuation reference**  
-**Last updated:** 11 November 2026 (customer onboarding / branch and staff schema update)  
+**Last updated:** 11 November 2026 (Platform Admin RBAC, secured Branch API and Branch Management UI release checkpoint)
 **Project owner / development context:** Innovex Fitness Center / Innovex Web Solutions  
 **Primary development environment:** Windows laptop, PowerShell, Flutter, Node.js and MySQL 8. The latest active workstation is the home laptop; see Section 21 for its project paths.
 
@@ -234,8 +234,8 @@ The License Management and Audit Logs tiles were initially placeholders. The Lic
 
 Classes:
 
-- `OrganizationsScreen` — list/search/status filter, organization cards and creation dialog.
-- `OrganizationEditScreen` — organization details and the existing organization-level license configuration editor.
+- `OrganizationsScreen` â€” list/search/status filter, organization cards and creation dialog.
+- `OrganizationEditScreen` â€” organization details and the existing organization-level license configuration editor.
 
 Organization creation collects name, slug, optional email/phone/address and initial license settings. License choices are `trial`, `monthly`, `yearly`, and `lifetime`; maximum devices is validated in the UI between 1 and 1000. Trial duration is configurable from 1 to 365 days. Lifetime uses no expiry date.
 
@@ -368,8 +368,8 @@ app.use("/api/licenses", licenseRoutes);
 
 Also exposes:
 
-- `GET /` — API-running response.
-- `GET /api/health` — checks MySQL with `SELECT 1 AS database_connected`.
+- `GET /` â€” API-running response.
+- `GET /api/health` â€” checks MySQL with `SELECT 1 AS database_connected`.
 
 ### Database connection
 
@@ -408,7 +408,7 @@ The platform database has these table names in the current project design/inspec
 
 The first six support the platform-management/device/license/audit features documented here. The remaining tables are present in the database design inventory, but their complete DDL and column-level definitions were not available in the conversation excerpts. Membership/program-specific table names were not confirmed and must not be invented.
 
-### 6.2 `organizations` — full DDL facts confirmed
+### 6.2 `organizations` â€” full DDL facts confirmed
 
 | Column | Type / definition | Constraints / meaning |
 |---|---|---|
@@ -425,7 +425,7 @@ The first six support the platform-management/device/license/audit features docu
 
 `organizations` is the parent for branch, device and license ownership in the implemented platform design. A separate full DDL excerpt for the organization table was shared.
 
-### 6.3 `licenses` — full DDL facts confirmed
+### 6.3 `licenses` â€” full DDL facts confirmed
 
 | Column | Type / definition | Constraints / meaning |
 |---|---|---|
@@ -455,7 +455,7 @@ Important rules:
 - `max_devices` is validated by the License API between 1 and 1000.
 - Renewals create a new row; history is preserved.
 
-### 6.4 `platform_admins` — full DDL facts confirmed
+### 6.4 `platform_admins` â€” full DDL facts confirmed
 
 | Column | Type / definition | Constraints / meaning |
 |---|---|---|
@@ -468,7 +468,7 @@ Important rules:
 | `created_at` | `timestamp` | Nullable, default current timestamp |
 | `updated_at` | `timestamp` | Nullable, current timestamp on update |
 
-### 6.5 `platform_audit_logs` — all columns confirmed; constraints partly unknown
+### 6.5 `platform_audit_logs` â€” all columns confirmed; constraints partly unknown
 
 | Column | Type / definition | Nullability / meaning |
 |---|---|---|
@@ -487,7 +487,7 @@ Important rules:
 
 Only the `INFORMATION_SCHEMA.COLUMNS` output was used for the complete column list. The full FK/index/engine DDL was truncated in the user-provided output, so do not infer unshown FK delete rules.
 
-### 6.6 `branches` — columns observed in controller SQL; full DDL not provided
+### 6.6 `branches` â€” columns observed in controller SQL; full DDL not provided
 
 Observed branch fields:
 
@@ -502,7 +502,7 @@ Observed branch fields:
 
 The controller uses `organization_id` as the organization association. Branch creation requires name and branch code; the code is uppercased and duplicate branch codes are rejected within the same organization. It returns new branches with status `active`. Full types, indexes and formal FK constraints were not verified with `SHOW CREATE TABLE`.
 
-### 6.7 `devices` — columns observed through controllers; full DDL not provided
+### 6.7 `devices` â€” columns observed through controllers; full DDL not provided
 
 Fields used in API/controller queries and updates include:
 
@@ -520,7 +520,7 @@ Fields used in API/controller queries and updates include:
 
 The exact complete table definition, unique keys, FK constraints, and any additional timestamp fields were not supplied. Device states used in code are `pending`, `active`, and `revoked`.
 
-### 6.8 User, role and permission tables — names known, full DDL not supplied
+### 6.8 User, role and permission tables â€” names known, full DDL not supplied
 
 The design inventory includes:
 
@@ -596,10 +596,10 @@ Controller: `organizationController.js`. Routes in `organizationRoutes.js` apply
 
 Endpoints:
 
-- `GET /api/organizations/` — list organizations and the latest license information.
-- `POST /api/organizations/` — create organization and its initial license.
-- `PUT /api/organizations/:organizationId` — update organization and, when license fields are supplied, update the latest license row in place.
-- `PATCH /api/organizations/:organizationId/status` — set organization status (`active` or `inactive` in this controller's accepted workflow); action is audited.
+- `GET /api/organizations/` â€” list organizations and the latest license information.
+- `POST /api/organizations/` â€” create organization and its initial license.
+- `PUT /api/organizations/:organizationId` â€” update organization and, when license fields are supplied, update the latest license row in place.
+- `PATCH /api/organizations/:organizationId/status` â€” set organization status (`active` or `inactive` in this controller's accepted workflow); action is audited.
 
 Organization creation details:
 
@@ -607,8 +607,8 @@ Organization creation details:
 - Slug normalized lowercase and constrained to letters, numbers and hyphens.
 - Organization code generated as `GYM-` plus six uppercase hexadecimal characters from `crypto.randomBytes(3)`.
 - Initial license can be trial/monthly/yearly/lifetime.
-- Device limit 1–1000.
-- Trial duration 1–365 days (default 14).
+- Device limit 1â€“1000.
+- Trial duration 1â€“365 days (default 14).
 - Lifetime has no expiry.
 - Creation and initial license are handled in a transaction and audit logging is used.
 
@@ -618,8 +618,8 @@ Organization status and license status are separate concepts. An organization ca
 
 Controller: `branchController.js`. Current routes:
 
-- `GET /api/branches/:organizationId` — list branches.
-- `POST /api/branches/:organizationId` — create a branch.
+- `GET /api/branches/:organizationId` â€” list branches.
+- `POST /api/branches/:organizationId` â€” create a branch.
 
 The latest source inspection confirmed that `branchRoutes.js` applies **no authentication or permission middleware**. The controller performs direct queries/inserts, has no transaction-backed platform audit write, and exposes no update/status-change/delete API. Route mounting is `app.use("/api/branches", branchRoutes)` in `server.js`. These routes must be secured before the Super Admin branch screen is connected. Platform Admin calls need `authenticatePlatformAdmin` plus permission checks; later Gym Staff branch management must use Gym authentication, permission checks and organization/branch scoping rather than reusing a Platform Admin identity.
 
@@ -647,7 +647,7 @@ These relationships confirm that the existing role tables are designed for organ
 
 ### Permission catalog observed in MySQL
 
-The user supplied the current rows from `permissions` (IDs 1–21):
+The user supplied the current rows from `permissions` (IDs 1â€“21):
 
 | ID | Permission key | Module |
 |---:|---|---|
@@ -723,10 +723,10 @@ The device token is not stored plaintext in the database.
 
 ### Device management endpoints
 
-- `GET /api/devices/` — list with server-side pagination and filters.
-- `POST /api/devices/register` — register pending device and return activation code.
-- `POST /api/devices/:deviceId/activation-code` — regenerate activation code / reactivate revoked device flow in the management controller.
-- `PATCH /api/devices/:deviceId/revoke` — revoke a device.
+- `GET /api/devices/` â€” list with server-side pagination and filters.
+- `POST /api/devices/register` â€” register pending device and return activation code.
+- `POST /api/devices/:deviceId/activation-code` â€” regenerate activation code / reactivate revoked device flow in the management controller.
+- `PATCH /api/devices/:deviceId/revoke` â€” revoke a device.
 
 All management endpoints are individually protected by `authenticatePlatformAdmin`; the `/activate` route remains the gym-app activation flow.
 
@@ -810,8 +810,8 @@ List filters include `search`, `status`, `licenseType`, `organizationId`, `page`
 
 Important logic in `licenseManagementController.js`:
 
-- `validateMaxDevices`: integer 1–1000.
-- Trial duration: 1–365 days; default 14 days.
+- `validateMaxDevices`: integer 1â€“1000.
+- Trial duration: 1â€“365 days; default 14 days.
 - Monthly: 30 days.
 - Yearly: 365 days.
 - Lifetime: no expiry.
@@ -1246,7 +1246,7 @@ Response keys: `success`, `auditLogs`, `pagination`, `actions`, `entityTypes`, `
 
 ---
 
-## 21. Current Development Status (10 November 2026 — latest home-laptop update)
+## 21. Current Development Status (10 November 2026 â€” latest home-laptop update)
 
 | Area | Status | Evidence / qualification |
 |---|---|---|
@@ -1263,7 +1263,7 @@ Response keys: `success`, `auditLogs`, `pagination`, `actions`, `entityTypes`, `
 | Initial Gym Owner provisioning | **Missing** | No secure invitation, password setup, user creation or initial role/branch assignment flow verified |
 | License management | **Working per user** | Previous license issue/renewal/status flow and history tested; current test organization was created with device limit 1 |
 | Device registration screen/API | **Working for current test setup** | User registered two tablets for the one-device organization; both are pending |
-| Maximum-device activation test | **Pending — exact next test** | Need activate first pending tablet and verify second is rejected with `DEVICE_LIMIT_REACHED` |
+| Maximum-device activation test | **Pending â€” exact next test** | Need activate first pending tablet and verify second is rejected with `DEVICE_LIMIT_REACHED` |
 | Device activation API | **Implemented; activation audit gap** | Activation controller enforces current active-device quota but does not write an audit record |
 | Device registration/regenerate/revoke audit | **Platform audit integrated** | Management controller writes platform audit events in the mutation transaction |
 | Operational `audit_logs` schema | **DDL confirmed; needs extension/design** | Existing table has org/branch/user/action/entity/description/network metadata; no actor type/identifier or old/new JSON columns |
@@ -1296,7 +1296,7 @@ Super Admin commit:  a1fe13f
 Gym App commit:      8981e1e
 ```
 
-## 22. Pending Development Tasks — reprioritized
+## 22. Pending Development Tasks â€” reprioritized
 
 ### Immediate platform/device work
 
@@ -1347,7 +1347,7 @@ The next implementation sequence is:
 9. Complete the live one-device/two-pending-tablet quota test: activate Tablet A, verify Tablet B is blocked with `403 DEVICE_LIMIT_REACHED`, revoke Tablet A, regenerate Tablet B's code if needed, then retry and verify success.
 10. Verify platform and operational audit history for each relevant action before proceeding to member/membership features.
 
-### Current test facts — do not lose these
+### Current test facts â€” do not lose these
 
 - The user created a new organization from the Super Admin Flutter app.
 - The license/device limit for that organization is **1**.
@@ -1358,7 +1358,7 @@ The next implementation sequence is:
 
 ---
 
-# CURRENT DEVELOPMENT HANDOVER — AUTHORITATIVE (10 November 2026)
+# CURRENT DEVELOPMENT HANDOVER â€” AUTHORITATIVE (10 November 2026)
 
 ## Current position
 
@@ -1398,21 +1398,21 @@ https://github.com/arafath65/gym-management-super-admin.git
 https://github.com/arafath65/gym-management-apps.git
 ```
 
-## 24. GitHub Repository State — latest verified home-laptop sync (10 November 2026)
+## 24. GitHub Repository State â€” latest verified home-laptop sync (10 November 2026)
 
 The three projects are separate Git repositories; each must be committed and pushed independently.
 
 | Project | GitHub remote | Latest confirmed commit | Latest home-laptop status |
 |---|---|---|---|
-| API | `https://github.com/arafath65/gym-management-api.git` | `78de952` — Add API source backup snapshots; preceding `908d5af` — Add license and audit management APIs | Pulled; `git pull --ff-only origin main` reported already up to date; working tree clean in latest reported check |
-| Super Admin Flutter | `https://github.com/arafath65/gym-management-super-admin.git` | `4e50ec3` — Update gym management project master handover (previous feature commit `a1fe13f`) | `4e50ec3` was pushed successfully; latest source inspection reported clean before this new documentation revision |
-| Gym App Flutter | `https://github.com/arafath65/gym-management-apps.git` | `8981e1e` — Initial commit: Gym Management Flutter App | Pull reported already up to date; working tree clean in latest reported check |
+| API | `https://github.com/arafath65/gym-management-api.git` | `78de952` â€” Add API source backup snapshots; preceding `908d5af` â€” Add license and audit management APIs | Pulled; `git pull --ff-only origin main` reported already up to date; working tree clean in latest reported check |
+| Super Admin Flutter | `https://github.com/arafath65/gym-management-super-admin.git` | `4e50ec3` â€” Update gym management project master handover (previous feature commit `a1fe13f`) | `4e50ec3` was pushed successfully; latest source inspection reported clean before this new documentation revision |
+| Gym App Flutter | `https://github.com/arafath65/gym-management-apps.git` | `8981e1e` â€” Initial commit: Gym Management Flutter App | Pull reported already up to date; working tree clean in latest reported check |
 
 The previous master document revision was committed and pushed to the Super Admin repository in `4e50ec3`. This newer onboarding/source-inspection revision must now be copied into that repository, reviewed, committed as a single file and pushed. Stage only `GYM_MANAGEMENT_PROJECT_MASTER.md`; do not stage unrelated files or backups.
 
-## 26. Latest Home-Laptop Update and Live Device Test State — 10 November 2026
+## 26. Latest Home-Laptop Update and Live Device Test State â€” 10 November 2026
 
-This section supersedes the earlier “Exact Next Development Step” and historical handoff statements wherever they conflict.
+This section supersedes the earlier â€œExact Next Development Stepâ€ and historical handoff statements wherever they conflict.
 
 ### What was verified in this update
 
@@ -1477,7 +1477,7 @@ The user has reported only the organization creation and two pending registratio
 **End of updated master handover document.**
 
 
-## 27. Customer Onboarding, Branch/Staff Provisioning and Latest Source Inspection — 10 November 2026
+## 27. Customer Onboarding, Branch/Staff Provisioning and Latest Source Inspection â€” 10 November 2026
 
 This section is the latest verified update and supersedes older statements about the branch/user/role implementation status and Platform Admin RBAC schema. It records the actual code and database state supplied from the home laptop.
 
@@ -1491,10 +1491,10 @@ The user executed the initial Platform Admin RBAC SQL and verified the following
 
 Created tables:
 
-- `platform_permissions` — platform-specific permission catalog.
-- `platform_roles` — platform role definitions.
-- `platform_admin_roles` — Platform Admin-to-role assignment.
-- `platform_role_permissions` — role-to-platform-permission assignment.
+- `platform_permissions` â€” platform-specific permission catalog.
+- `platform_roles` â€” platform role definitions.
+- `platform_admin_roles` â€” Platform Admin-to-role assignment.
+- `platform_role_permissions` â€” role-to-platform-permission assignment.
 
 The initial `Super Admin` role is a system role and is assigned to Platform Admin ID `1`. It has all 19 currently seeded platform permissions. The initial catalog covers dashboard view; organization view/create/update/suspend; branch view/create/update/delete; device view/register/activation-code regeneration/revoke; license view/create/renew/activate/suspend; and audit-log view.
 
@@ -1505,7 +1505,7 @@ The initial `Super Admin` role is a system role and is assigned to Platform Admi
 The user supplied the `SHOW CREATE TABLE user_branch_access` result:
 
 - Columns: `organization_id` (required), `user_id` (required), `branch_id` (required).
-- Primary key: (`user_id`, `branch_id`) — a user cannot have a duplicate assignment to the same branch, but can be assigned to multiple branches.
+- Primary key: (`user_id`, `branch_id`) â€” a user cannot have a duplicate assignment to the same branch, but can be assigned to multiple branches.
 - Composite foreign key (`organization_id`, `branch_id`) references `branches` (`organization_id`, `id`) with `ON DELETE CASCADE`.
 - Composite foreign key (`organization_id`, `user_id`) references `users` (`organization_id`, `id`) with `ON DELETE CASCADE`.
 
@@ -1571,7 +1571,7 @@ The organization creation dialog currently provisions an organization and initia
 
 Super Admin `git status --short` produced no entries at inspection time (working tree clean). Local backup files exist in the feature folders; do not stage or commit those backups.
 
-### 27.6 Agreed commercial onboarding model — Power World Gym example
+### 27.6 Agreed commercial onboarding model â€” Power World Gym example
 
 The product is intended to work as a multi-organization SaaS platform:
 
@@ -1612,7 +1612,7 @@ The immediate onboarding foundation is now ordered as follows:
 
 ---
 
-## 28. Platform Admin Permission Enforcement and Branch API Milestone — 11 November 2026
+## 28. Platform Admin Permission Enforcement and Branch API Milestone â€” 11 November 2026
 
 This section records the latest implemented and tested API changes on the home laptop. It supersedes earlier statements in Sections 27.1, 27.4, 27.7 and 27.8 wherever they said Platform Admin permission enforcement was still absent or the Branch API only supported listing/creation. The historical inspection findings remain useful as a record of what was true before this milestone.
 
@@ -1743,7 +1743,7 @@ Audit verification found:
 | 12 | `BRANCH_DEACTIVATED` | branch | 3 | Deactivated branch Wellampitiya |
 | 13 | `BRANCH_REACTIVATED` | branch | 3 | Reactivated branch Wellampitiya |
 
-The user also confirmed successful branch update, deactivation and reactivation API responses. The final branch state is `active`. All three corresponding audit records (IDs 11–13) were found; the branch-created audit record (ID 10) was separately verified.
+The user also confirmed successful branch update, deactivation and reactivation API responses. The final branch state is `active`. All three corresponding audit records (IDs 11â€“13) were found; the branch-created audit record (ID 10) was separately verified.
 
 ### 28.6 Current API working-tree state
 
@@ -1764,6 +1764,135 @@ The seven files listed in Section 28.2 are modified locally and have passed synt
 **The next task is to build the Flutter Super Admin Branch Management feature**, after completing a negative per-permission authorization test. The API Branch endpoints for listing, creation, editing and soft activation/deactivation have been implemented and positively tested against Power World. Power World organization ID `3` has branch ID `3` (`Wellampitiya`, `PWG-MAIN-001`), currently active. Its branch audit trail contains IDs `10` through `13` as listed above.
 
 The existing one-device/two-pending-tablet test organization remains a separate outstanding device-quota test. Do not confuse it with Power World's branch test or claim that device activation quota behavior has passed.
+
+---
+
+**End of updated master handover document.**
+
+
+---
+
+## 29. Release Checkpoint — Platform RBAC, Branch API and Branch Management UI (11 November 2026)
+
+This section is the latest release checkpoint and supersedes earlier statements in this document that Platform Admin permission enforcement is pending, that the Branch API is unauthenticated/basic, or that the Super Admin Branch Management screen does not exist. Historical sections are retained to preserve the development record.
+
+### 29.1 API repository — local changes ready for release
+
+Repository: `gym_management_api`
+Remote: `https://github.com/arafath65/gym-management-api.git`
+Branch at release check: `main`, tracking `origin/main` with no reported ahead/behind commits. Seven files are modified locally and remain uncommitted/unpushed:
+
+- `src/controllers/branchController.js`
+- `src/middleware/platformAdminMiddleware.js`
+- `src/routes/branchRoutes.js`
+- `src/routes/deviceRoutes.js`
+- `src/routes/licenseRoutes.js`
+- `src/routes/organizationRoutes.js`
+- `src/routes/platformAdminRoutes.js`
+
+Validation on 11 November 2026:
+
+- `node --check` passed for all seven modified JavaScript files.
+- `git diff --check` passed. Git emitted only normal Windows LF-to-CRLF working-copy notices.
+- Anonymous requests to protected organization, branch, device, license, dashboard and platform audit endpoints returned HTTP 401.
+- Authenticated Super Admin requests to organization list, Power World branch list, device list, license list, dashboard stats and platform audit list returned HTTP 200.
+- A negative permission test using an account without a required permission has not yet been performed. Do not claim denied-permission behavior is independently verified until that test is complete.
+
+### 29.2 Platform Admin permission enforcement
+
+`platformAdminMiddleware.js` now verifies the Platform Admin JWT and active account, retrieves current permission keys through `platform_admin_roles`, `platform_role_permissions` and `platform_permissions`, and exposes those permissions to route middleware. Permission assignments are queried from MySQL rather than trusted from JWT claims.
+
+The active Platform Admin ID `1` has the `Super Admin` role and the 19 permissions listed in Section 28.1. Protected route mappings are implemented for dashboard, organizations, branches, devices, licenses and platform audit viewing. Gym Staff RBAC remains separate and organization-scoped; do not mix its `roles`/`user_roles` model with Platform Admin RBAC.
+
+### 29.3 Branch API — secured branch lifecycle
+
+The Branch API now requires Platform Admin authentication and action-specific permission checks:
+
+| Method | Endpoint | Permission | Behavior |
+|---|---|---|---|
+| GET | `/api/branches/:organizationId` | `branches.view` | List organization branches |
+| POST | `/api/branches/:organizationId` | `branches.create` | Create branch |
+| PATCH | `/api/branches/:organizationId/:branchId` | `branches.update` | Update branch details |
+| PATCH | `/api/branches/:organizationId/:branchId/status` | `branches.update` | Activate/deactivate branch |
+
+Create, update and status changes use a DB transaction and write `platform_audit_logs` in the same transaction. An audit-write failure prevents the mutation from committing. Branch code uniqueness is organization-scoped. Inactive branches cannot be edited until reactivated. Deactivation is soft (`status = inactive`); physical deletion is not implemented, preserving references and history.
+
+### 29.4 Verified Power World branch and audit history
+
+| Field | Verified value |
+|---|---|
+| Organization | Power World (ID `3`) |
+| Branch | Wellampitiya (ID `3`) |
+| Branch code | `PWG-MAIN-001` |
+| Phone | `+94753369680` |
+| Address | `38, Awissavella Road, Wellampitiya, Colombo 10` |
+| Final recorded status | `active` |
+
+Verified platform audit entries:
+
+| Audit ID | Action | Entity ID |
+|---:|---|---:|
+| 10 | `BRANCH_CREATED` | 3 |
+| 11 | `BRANCH_UPDATED` | 3 |
+| 12 | `BRANCH_DEACTIVATED` | 3 |
+| 13 | `BRANCH_REACTIVATED` | 3 |
+
+### 29.5 Super Admin Flutter — Branch Management UI
+
+Repository: `gym_management_super_admin`
+Remote: `https://github.com/arafath65/gym-management-super-admin.git`
+Branch at release check: `main`, tracking `origin/main` with no reported ahead/behind commits.
+
+Local uncommitted/unpushed changes:
+
+- `lib/core/services/auth_service.dart` — authenticated branch create, update and status API methods, alongside the existing list method.
+- `lib/features/dashboard/dashboard_screen.dart` — Branch Management dashboard navigation added; existing Audit Logs navigation preserved.
+- `lib/features/branches/branch_management_screen.dart` — new Branch Management screen.
+
+Current UI behavior:
+
+- Organization selection and branch listing.
+- Search by branch name, code, phone or address.
+- Active is the default filter; All, Active and Inactive are in a dropdown beside search.
+- Responsive two-column cards on wide layouts.
+- Three-dot card menu instead of visible action buttons.
+- Active branch menu: Edit and Deactivate. Inactive branch menu: Reactivate only.
+- An additional dialog-entry guard blocks editing an inactive branch until it is reactivated.
+- Create/edit forms and status confirmation dialogs call the Branch API.
+- After deactivation, the branch disappears from the default Active view; it remains available in Inactive or All.
+
+The user reported Branch Management as functionally acceptable for this release checkpoint. The release-check report shows `flutter analyze` completed with **No issues found** and `git diff --check` passed. `git diff -- lib/features/audit_logs/audit_logs_screen.dart` returned no changes, so the existing Audit Logs screen was preserved. A Flutter framework assertion had occurred earlier during an attempted edit/cancel flow on an inactive branch; the follow-up patch removed Edit from inactive-branch actions and added a dialog-entry guard. The latest release-check report shows analyzer success after these UI changes. Do not claim the framework assertion has been independently reproduced and root-caused without a full runtime stack trace.
+
+### 29.6 Gym App repository — no release changes
+
+Repository: `gym_management_app`
+Remote: `https://github.com/arafath65/gym-management-apps.git`
+Branch at release check: `main`, tracking `origin/main`, working tree clean. No modified or untracked files were found. `flutter analyze` completed with **No issues found**. No new commit is required because there are no Gym App changes to publish.
+
+### 29.7 Release validation summary
+
+| Repository | Pending files | Validation | Release action |
+|---|---:|---|---|
+| API | 7 modified | Seven `node --check` checks passed; `git diff --check` passed; anonymous-auth and positive-auth API tests passed | Commit and push the seven named files |
+| Super Admin | 2 modified + 1 new | `flutter analyze` passed; `git diff --check` passed; Audit Logs screen unchanged | Commit/push the two named existing files, new Branch Management screen and this master document |
+| Gym App | 0 | `flutter analyze` passed; working tree clean | No commit; verify synchronization with `origin/main` |
+
+Do not use `git add .`. Do not include `.env`, local secrets, generated build output, temporary backups or unrelated files. Each repository has a separate Git history and must be handled independently.
+
+### 29.8 Outstanding work after this release checkpoint
+
+1. Run a negative Platform Admin permission test (for example, a temporary role without `branches.create` must receive HTTP 403 `PLATFORM_PERMISSION_DENIED`); restore/remove test assignments safely afterward.
+2. Consider tightening license-status permission routing so invalid status values are rejected before permission mapping; the controller validates allowed status values.
+3. Implement first Gym Owner provisioning with secure invitation token hashing/expiry, owner password setup, initial Gym Staff role and branch assignment, and transactional audit history.
+4. Complete Gym Staff authentication and backend permission/branch-scope enforcement.
+5. Add accurate device-originated activation audit events and Platform Admin login/security audit events.
+6. Implement the Gym App device activation screen and secure device-token storage.
+7. Complete the existing one-device/two-pending-tablet quota test. The organization with max devices `1` and its two pending devices remain an outstanding test, separate from Power World's branch verification.
+8. After onboarding/auth/device-security foundations are complete, continue membership, payment/approval, program and fitness-progress modules.
+
+### 29.9 Exact continuation point
+
+After publishing this checkpoint, continue with a controlled negative Platform Admin permission test, followed by first Gym Owner invitation and Gym Staff authentication/authorization design. The API and Super Admin changes are release candidates based on syntax, analyzer, positive-auth and branch audit checks recorded above. The Gym App repository had no changes at this checkpoint.
 
 ---
 

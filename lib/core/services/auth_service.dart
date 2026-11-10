@@ -535,6 +535,145 @@ class AuthService {
     }
   }
 
+  // -------------------------------------------------------
+  // BRANCH MANAGEMENT
+  // -------------------------------------------------------
+
+  String _branchApiError(DioException error, String fallback) {
+    final data = error.response?.data;
+
+    if (data is Map && data['message'] != null) {
+      return data['message'].toString();
+    }
+
+    return error.message ?? fallback;
+  }
+
+  Future<Map<String, dynamic>> createBranch({
+    required int organizationId,
+    required String name,
+    required String branchCode,
+    String? phone,
+    String? address,
+  }) async {
+    try {
+      final token = await getToken();
+
+      if (token == null || token.isEmpty) {
+        throw Exception('Please sign in again.');
+      }
+
+      final response = await _dio.post(
+        '/branches/$organizationId',
+        data: {
+          'name': name.trim(),
+          'branch_code': branchCode.trim(),
+          'phone': phone?.trim().isEmpty == true ? null : phone?.trim(),
+          'address': address?.trim().isEmpty == true ? null : address?.trim(),
+        },
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+
+      final data = response.data;
+
+      if (data is! Map<String, dynamic> ||
+          data['success'] != true ||
+          data['branch'] is! Map) {
+        throw Exception(
+          data is Map
+              ? data['message']?.toString() ?? 'Unable to create branch.'
+              : 'Unexpected server response.',
+        );
+      }
+
+      return data;
+    } on DioException catch (e) {
+      throw Exception(_branchApiError(e, 'Unable to create branch.'));
+    }
+  }
+
+  Future<Map<String, dynamic>> updateBranch({
+    required int organizationId,
+    required int branchId,
+    required String name,
+    required String branchCode,
+    String? phone,
+    String? address,
+  }) async {
+    try {
+      final token = await getToken();
+
+      if (token == null || token.isEmpty) {
+        throw Exception('Please sign in again.');
+      }
+
+      final response = await _dio.patch(
+        '/branches/$organizationId/$branchId',
+        data: {
+          'name': name.trim(),
+          'branch_code': branchCode.trim(),
+          'phone': phone?.trim().isEmpty == true ? null : phone?.trim(),
+          'address': address?.trim().isEmpty == true ? null : address?.trim(),
+        },
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+
+      final data = response.data;
+
+      if (data is! Map<String, dynamic> ||
+          data['success'] != true ||
+          data['branch'] is! Map) {
+        throw Exception(
+          data is Map
+              ? data['message']?.toString() ?? 'Unable to update branch.'
+              : 'Unexpected server response.',
+        );
+      }
+
+      return data;
+    } on DioException catch (e) {
+      throw Exception(_branchApiError(e, 'Unable to update branch.'));
+    }
+  }
+
+  Future<Map<String, dynamic>> setBranchStatus({
+    required int organizationId,
+    required int branchId,
+    required String status,
+  }) async {
+    try {
+      if (!['active', 'inactive'].contains(status)) {
+        throw Exception('Invalid branch status.');
+      }
+
+      final token = await getToken();
+
+      if (token == null || token.isEmpty) {
+        throw Exception('Please sign in again.');
+      }
+
+      final response = await _dio.patch(
+        '/branches/$organizationId/$branchId/status',
+        data: {'status': status},
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+
+      final data = response.data;
+
+      if (data is! Map<String, dynamic> || data['success'] != true) {
+        throw Exception(
+          data is Map
+              ? data['message']?.toString() ?? 'Unable to update branch status.'
+              : 'Unexpected server response.',
+        );
+      }
+
+      return data;
+    } on DioException catch (e) {
+      throw Exception(_branchApiError(e, 'Unable to update branch status.'));
+    }
+  }
+
   Future<Map<String, dynamic>> registerDevice({
     required int organizationId,
     int? branchId,

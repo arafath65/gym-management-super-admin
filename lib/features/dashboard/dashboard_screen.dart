@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/services/auth_service.dart';
 import '../organizations/organizations_screen.dart';
 import '../devices/device_management_screen.dart';
+import '../branches/branch_management_screen.dart';
 import '../audit_logs/audit_logs_screen.dart';
 import '../licenses/license_management_screen.dart';
 
@@ -125,7 +126,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       title: 'Organizations',
                       value: _isLoadingOrganizations
                           ? '...'
-                          : _organizationCount?.toString() ?? 'â€”',
+                          : _organizationCount?.toString() ?? 'Ã¢â‚¬â€',
                       icon: Icons.business_outlined,
                     ),
                   ),
@@ -135,7 +136,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       title: 'Active Devices',
                       value: _isLoadingActiveDevices
                           ? '...'
-                          : _activeDeviceCount?.toString() ?? 'â€”',
+                          : _activeDeviceCount?.toString() ?? 'Ã¢â‚¬â€',
                       icon: Icons.devices_outlined,
                     ),
                   ),
@@ -150,7 +151,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       title: 'Active Licenses',
                       value: _isLoadingActiveDevices
                           ? '...'
-                          : _activeLicenseCount?.toString() ?? 'â€”',
+                          : _activeLicenseCount?.toString() ?? 'Ã¢â‚¬â€',
                       icon: Icons.verified_outlined,
                     ),
                   ),
@@ -160,7 +161,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       title: 'Pending Devices',
                       value: _isLoadingActiveDevices
                           ? '...'
-                          : _pendingDeviceCount?.toString() ?? 'â€”',
+                          : _pendingDeviceCount?.toString() ?? 'Ã¢â‚¬â€',
                       icon: Icons.pending_actions_outlined,
                     ),
                   ),
@@ -233,6 +234,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   _loadOrganizations();
                   _loadActiveDevices();
+                },
+              ),
+              _MenuTile(
+                icon: Icons.account_tree_outlined,
+                title: 'Branch Management',
+                subtitle: 'Create, edit and manage organization branches',
+                onTap: () async {
+                  await Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const BranchManagementScreen(),
+                    ),
+                  );
                 },
               ),
               _MenuTile(
