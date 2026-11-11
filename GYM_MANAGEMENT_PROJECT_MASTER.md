@@ -1,7 +1,7 @@
 # GYM MANAGEMENT PROJECT MASTER
 
 **Technical handover and continuation reference**  
-**Last updated:** 11 November 2026 (Platform Admin RBAC, secured Branch API and Branch Management UI release checkpoint)
+**Last updated:** 11 November 2026 (Gym Owner onboarding, editable owner account and password-reset milestone)  
 **Project owner / development context:** Innovex Fitness Center / Innovex Web Solutions  
 **Primary development environment:** Windows laptop, PowerShell, Flutter, Node.js and MySQL 8. The latest active workstation is the home laptop; see Section 21 for its project paths.
 
@@ -27,7 +27,7 @@ The intended product scope includes:
 
 ### Current product boundary
 
-The platform-management foundation is substantially further along than the day-to-day gym operations application. The Super Admin Flutter app and the Node API already have organization, device and license management; branch management is only a basic unauthenticated API, while Gym Staff users/roles and first-owner provisioning remain unimplemented. The audit-log read screen has been added but still requires final lint/runtime verification. Membership, payments, programs, enrollments and fitness progress are product requirements, not confirmed completed modules in the current Flutter/API codebase.
+The platform-management foundation is substantially further along than the day-to-day gym operations application. The Super Admin Flutter app and Node API include organization, device, license and secured branch management. Initial Gym Owner/Gym Admin provisioning during organization creation, Gym Owner account lookup/editing and Platform Admin password reset are now implemented and reported complete in the Super Admin workflow (see Section 30). Full Gym Staff authentication/session handling and tenant-side user/role/permission management remain pending. Membership, payments, programs, enrollments and fitness progress remain product requirements, not confirmed completed modules in the current Flutter/API codebase.
 
 The original design considered an organization/tenant with multiple branches. The user later said full multi-tenant complexity could be deferred initially while branch-wise operations remained necessary. The implemented platform layer nevertheless has an `organizations` boundary, organization-owned branches, licenses and devices. The current state is therefore organization-scoped at the platform/device/license level; do not assume all future operational data APIs are already tenant-isolated.
 
@@ -235,7 +235,7 @@ The License Management and Audit Logs tiles were initially placeholders. The Lic
 Classes:
 
 - `OrganizationsScreen` â€” list/search/status filter, organization cards and creation dialog.
-- `OrganizationEditScreen` â€” organization details and the existing organization-level license configuration editor.
+- `OrganizationEditScreen` â€” organization details, existing organization-level license configuration, editable initial Gym Owner name/login username, and a password-reset action (see Section 30).
 
 Organization creation collects name, slug, optional email/phone/address and initial license settings. License choices are `trial`, `monthly`, `yearly`, and `lifetime`; maximum devices is validated in the UI between 1 and 1000. Trial duration is configurable from 1 to 365 days. Lifetime uses no expiry date.
 
@@ -1778,8 +1778,8 @@ This section is the latest release checkpoint and supersedes earlier statements 
 
 ### 29.1 API repository — local changes ready for release
 
-Repository: `gym_management_api`
-Remote: `https://github.com/arafath65/gym-management-api.git`
+Repository: `gym_management_api`  
+Remote: `https://github.com/arafath65/gym-management-api.git`  
 Branch at release check: `main`, tracking `origin/main` with no reported ahead/behind commits. Seven files are modified locally and remain uncommitted/unpushed:
 
 - `src/controllers/branchController.js`
@@ -1839,8 +1839,8 @@ Verified platform audit entries:
 
 ### 29.5 Super Admin Flutter — Branch Management UI
 
-Repository: `gym_management_super_admin`
-Remote: `https://github.com/arafath65/gym-management-super-admin.git`
+Repository: `gym_management_super_admin`  
+Remote: `https://github.com/arafath65/gym-management-super-admin.git`  
 Branch at release check: `main`, tracking `origin/main` with no reported ahead/behind commits.
 
 Local uncommitted/unpushed changes:
@@ -1865,8 +1865,8 @@ The user reported Branch Management as functionally acceptable for this release 
 
 ### 29.6 Gym App repository — no release changes
 
-Repository: `gym_management_app`
-Remote: `https://github.com/arafath65/gym-management-apps.git`
+Repository: `gym_management_app`  
+Remote: `https://github.com/arafath65/gym-management-apps.git`  
 Branch at release check: `main`, tracking `origin/main`, working tree clean. No modified or untracked files were found. `flutter analyze` completed with **No issues found**. No new commit is required because there are no Gym App changes to publish.
 
 ### 29.7 Release validation summary
@@ -1893,6 +1893,130 @@ Do not use `git add .`. Do not include `.env`, local secrets, generated build ou
 ### 29.9 Exact continuation point
 
 After publishing this checkpoint, continue with a controlled negative Platform Admin permission test, followed by first Gym Owner invitation and Gym Staff authentication/authorization design. The API and Super Admin changes are release candidates based on syntax, analyzer, positive-auth and branch audit checks recorded above. The Gym App repository had no changes at this checkpoint.
+
+---
+
+## 30. Release Checkpoint — Gym Owner Onboarding, Editable Account and Password Reset (11 November 2026)
+
+This is the current Gym Owner onboarding milestone. It supersedes earlier statements in this document that initial Gym Owner provisioning is entirely unimplemented. Earlier sections remain as historical records of the state at the time they were written. This milestone does **not** mean that the complete Gym Staff authentication, session, role-management or Gym App workflows are finished.
+
+### 30.1 Organization creation now provisions the initial Gym Admin account
+
+The existing Super Admin organization-creation flow now collects:
+
+- Organization name and slug, plus the existing optional contact details.
+- Initial Gym Admin / Gym Owner display name.
+- Initial Gym Admin login username (email).
+- Initial password and confirmation (confirmation is validated in Flutter and is not sent as a separate API value).
+- The existing initial license configuration.
+
+`POST /api/organizations/` now performs organization, initial license and initial Gym Admin provisioning in one database transaction. The Gym Admin account is inserted into the organization-scoped `users` table with active status. A system role named `Gym Admin` is created for that organization, the initial Gym Staff permission set is attached, and the user is assigned that role.
+
+The initial Gym Admin role currently receives these 13 organization-scoped Gym Staff permissions:
+
+- `branches.view`, `branches.create`, `branches.update`
+- `users.view`, `users.create`, `users.update`, `users.deactivate`
+- `roles.view`, `roles.create`, `roles.update`, `roles.assign`
+- `audit_logs.view`, `licenses.view`
+
+Platform-level organization administration permissions are not granted to the Gym Owner. Branch deletion and license activation/suspension permissions are also excluded from this initial role. The Gym Owner's future ability to change Gym Staff roles and permissions must be implemented in the tenant-side user/role management workflow; this Super Admin screen does not expose or edit the permission list.
+
+The initial password is validated to be at least 8 characters and no more than 72 UTF-8 bytes, then hashed using bcrypt (cost 12). The plaintext password and password hash are not included in API responses or audit values. Creation audit actions include `GYM_ADMIN_CREATED` and `GYM_ADMIN_ROLE_ASSIGNED`; these writes participate in the organization-creation transaction.
+
+### 30.2 First-branch access behavior
+
+`src/controllers/branchController.js` now grants a newly created branch to active users assigned the organization-scoped system `Gym Admin` role by inserting `user_branch_access` in the same branch-creation transaction. It also writes the `GYM_ADMIN_BRANCH_ACCESS_GRANTED` platform audit event in that transaction.
+
+The Fitness Mania organization shown during the UI verification had no branches yet, so its Gym Owner correctly showed **Branch Access (0)**. The branch-access automation is installed, but its first live end-to-end verification after creating a branch for this newly provisioned Gym Owner remains outstanding. Do not claim that branch assignment was verified until that test is completed.
+
+### 30.3 Gym Owner account lookup API
+
+The broad onboarding-report endpoint and its UI (permissions, branches, branch access and onboarding history) were removed from the Edit Organization workflow. The focused read endpoint is:
+
+| Method | Endpoint | Required Platform Admin permission | Response data |
+|---|---|---|---|
+| GET | `/api/organizations/:organizationId/gym-owner` | `organizations.view` | Gym Owner ID, name and login email; no password fields |
+
+The route is behind `authenticatePlatformAdmin`. The controller selects the organization-scoped user assigned to the system `Gym Admin` role. It does not select or return `password_hash`.
+
+### 30.4 Gym Owner name and login username can be edited
+
+The existing Edit Organization screen remains the same screen and retains its existing Organization Information and License Configuration forms. A focused **Gym Owner Account** card is included between those sections. It has editable fields:
+
+- Gym Owner Name (`users.full_name`)
+- Login Username (Email) (`users.email`)
+
+The existing **Save Changes** action submits these values along with the ordinary organization/license form. The API extends `PUT /api/organizations/:organizationId` to update the organization-scoped Gym Admin account in the same transaction as the organization/license update. It checks for a duplicate username/email within that organization and returns HTTP 409 when already used by another user. The account update is recorded as `GYM_ADMIN_ACCOUNT_UPDATED`, with old/new name and email only; no password data is logged.
+
+### 30.5 Password reset by Platform Admin
+
+The Gym Owner Account card has a **Reset Password** action. The dedicated API is:
+
+| Method | Endpoint | Required Platform Admin permission | Purpose |
+|---|---|---|---|
+| PATCH | `/api/organizations/:organizationId/gym-owner/reset-password` | `organizations.update` | Set a new password for the organization's system Gym Admin account |
+
+The request contains `newPassword` only. No current/old password is required. Flutter collects **New Password** and **Confirm New Password** and validates that they match; confirmation is not sent to the server. The API validates a minimum of 8 characters and a maximum of 72 UTF-8 bytes, hashes the new password with bcrypt cost 12, and updates `users.password_hash` inside a transaction. The successful reset is audited with action `GYM_ADMIN_PASSWORD_RESET`. Neither the plaintext password nor its hash is included in audit values or response data.
+
+### 30.6 Flutter reset-dialog lifecycle correction
+
+The first password-reset dialog implementation triggered a Flutter framework assertion involving an inherited widget being deactivated while it still had dependents. The available screenshot did not include a complete stack trace, so the exact framework widget/root cause was not established.
+
+The follow-up patch replaced the old `GlobalKey<FormState>` / `StatefulBuilder` dialog with a dedicated `_GymOwnerPasswordResetDialog` `StatefulWidget` that owns and disposes its two password text controllers. The isolated dialog performs inline validation without a nested `Form`, `GlobalKey` or `StatefulBuilder`.
+
+The user confirmed completion of the Super Admin organization-edit and Gym Owner account/password-reset work after installing the correction. Static validation output after the final patch:
+
+- `node --check` for the organization controller and routes completed without syntax errors.
+- `dart format` completed for `auth_service.dart` and `organization_edit_screen.dart`.
+- `flutter analyze` reported **No issues found**.
+- Git emitted only Windows LF-to-CRLF working-copy notices; `git diff --check` had been used in the patch workflow.
+- No database records were created by the patch scripts; the user separately created and viewed the Fitness Mania organization/Gym Admin through the application.
+
+Treat the user's confirmation as the functional acceptance of the Super Admin editing/reset workflow. Gym Staff login must still be tested after a separate Gym Staff authentication endpoint and app flow are implemented.
+
+### 30.7 Exact application files changed in this milestone
+
+API repository (`gym_management_api`):
+
+- `src/controllers/branchController.js` — automatic initial Gym Admin branch access grant and audit.
+- `src/controllers/organizationController.js` — transactional initial Gym Admin provisioning; Gym Owner lookup, profile update and password reset handlers.
+- `src/routes/organizationRoutes.js` — protected Gym Owner lookup and reset routes.
+
+Super Admin repository (`gym_management_super_admin`):
+
+- `lib/core/services/auth_service.dart` — initial Gym Admin request fields, owner lookup, profile update and password-reset API calls.
+- `lib/features/organizations/organizations_screen.dart` — initial Gym Admin name, username, password and confirmation in organization creation.
+- `lib/features/organizations/organization_edit_screen.dart` — existing organization editor extended with editable Gym Owner fields and isolated reset dialog.
+- `GYM_MANAGEMENT_PROJECT_MASTER.md` — this project handover document.
+
+No Gym App (`gym_management_app`) source change is part of this milestone. The last recorded release checkpoint showed its working tree clean and `flutter analyze` passing; recheck the current local tree before any push rather than assuming it has pending work.
+
+### 30.8 Repository release preparation
+
+The user's latest local status output after the final patch reported exactly three modified API files (the files in Section 30.7) and three modified Super Admin source files (the files in Section 30.7). No commit or push had yet been performed. The master document is to be copied into the Super Admin repository root and included in that repository's separate commit.
+
+GitHub repositories are independent:
+
+| Project | Remote | Current milestone action |
+|---|---|---|
+| API | `https://github.com/arafath65/gym-management-api.git` | Commit/push the three named API files after preflight |
+| Super Admin | `https://github.com/arafath65/gym-management-super-admin.git` | Commit/push the three named source files plus `GYM_MANAGEMENT_PROJECT_MASTER.md` |
+| Gym App | `https://github.com/arafath65/gym-management-apps.git` | No changes from this milestone; verify branch/status and push only if local commits are ahead of origin |
+
+Do not use `git add .`. Do not stage `.env`, passwords, JWTs, generated output, backup folders or unrelated modifications. Verify each repository's branch, remote, fetch status and staged filenames independently before committing. Do not create an empty commit for the Gym App when there are no changes.
+
+### 30.9 Remaining work after Gym Owner onboarding
+
+1. Create the first branch for a newly provisioned Gym Owner organization and verify the user receives a `user_branch_access` row and `GYM_ADMIN_BRANCH_ACCESS_GRANTED` audit event.
+2. Design and implement Gym Staff authentication/session handling separately from Platform Admin authentication. The Super Admin Platform Admin JWT must never be reused as a Gym Staff credential.
+3. Build tenant-side Gym Staff user, role and permission management so the Gym Owner can manage Cashier/Receptionist accounts and customize permissions within their organization/branch authority. Backend permission checks and branch scope remain mandatory.
+4. Run the controlled negative Platform Admin permission test (for example, an admin without `branches.create` must be denied with `PLATFORM_PERMISSION_DENIED`).
+5. Complete device-originated activation audit and Gym App device activation/token storage; repeat the one-active-device/two-pending-tablet quota test.
+6. After onboarding, authentication and device-security foundations are complete, continue membership, payment/approval, program and fitness-progress modules.
+
+### 30.10 Exact continuation point
+
+The current Super Admin onboarding milestone is complete according to the user's confirmation and has passed the reported static validation. The next practical verification is the first branch creation for Fitness Mania (or another fresh test organization) to verify automatic Gym Owner branch assignment and audit. In parallel, continue the separate Gym Staff authentication design; do not start membership modules before the onboarding/auth/device foundations are secure.
 
 ---
 

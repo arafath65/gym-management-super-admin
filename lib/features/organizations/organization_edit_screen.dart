@@ -1,18 +1,14 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../../core/services/auth_service.dart';
 
 class OrganizationEditScreen extends StatefulWidget {
-  const OrganizationEditScreen({
-    super.key,
-    required this.organization,
-  });
+  const OrganizationEditScreen({super.key, required this.organization});
 
   final Map<String, dynamic> organization;
 
   @override
-  State<OrganizationEditScreen> createState() =>
-      _OrganizationEditScreenState();
+  State<OrganizationEditScreen> createState() => _OrganizationEditScreenState();
 }
 
 class _OrganizationEditScreenState extends State<OrganizationEditScreen> {
@@ -26,12 +22,18 @@ class _OrganizationEditScreenState extends State<OrganizationEditScreen> {
   late final TextEditingController _addressController;
   late final TextEditingController _maxDevicesController;
   late final TextEditingController _notesController;
+  late final TextEditingController _gymOwnerNameController;
+  late final TextEditingController _gymOwnerUsernameController;
 
   late String _licenseType;
   late DateTime _expiryDate;
 
   bool _isSaving = false;
   String? _error;
+
+  bool _isLoadingGymOwner = true;
+  String? _gymOwnerError;
+  Map<String, dynamic>? _gymOwner;
 
   @override
   void initState() {
@@ -66,9 +68,10 @@ class _OrganizationEditScreenState extends State<OrganizationEditScreen> {
     _notesController = TextEditingController(
       text: organization['license_notes']?.toString() ?? '',
     );
+    _gymOwnerNameController = TextEditingController();
+    _gymOwnerUsernameController = TextEditingController();
 
-    _licenseType =
-        organization['license_type']?.toString() ?? 'trial';
+    _licenseType = organization['license_type']?.toString() ?? 'trial';
 
     final existingExpiry = DateTime.tryParse(
       organization['expires_at']?.toString() ?? '',
@@ -77,10 +80,54 @@ class _OrganizationEditScreenState extends State<OrganizationEditScreen> {
     final today = DateUtils.dateOnly(DateTime.now());
 
     // An expired license needs a new future expiry date when edited.
-    _expiryDate = existingExpiry != null &&
+    _expiryDate =
+        existingExpiry != null &&
             DateUtils.dateOnly(existingExpiry).isAfter(today)
         ? DateUtils.dateOnly(existingExpiry)
         : today.add(const Duration(days: 30));
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadGymOwner();
+    });
+  }
+
+  Future<void> _loadGymOwner() async {
+    final organizationId = int.tryParse(
+      widget.organization['id']?.toString() ?? '',
+    );
+    if (organizationId == null || organizationId <= 0) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingGymOwner = false;
+        _gymOwnerError = 'Invalid organization ID.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoadingGymOwner = true;
+      _gymOwnerError = null;
+    });
+
+    try {
+      final owner = await _authService.getOrganizationGymOwner(
+        organizationId: organizationId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _gymOwner = owner;
+        _gymOwnerNameController.text = owner?['full_name']?.toString() ?? '';
+        _gymOwnerUsernameController.text = owner?['email']?.toString() ?? '';
+        _isLoadingGymOwner = false;
+        _gymOwnerError = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingGymOwner = false;
+        _gymOwnerError = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
   }
 
   @override
@@ -92,6 +139,8 @@ class _OrganizationEditScreenState extends State<OrganizationEditScreen> {
     _addressController.dispose();
     _maxDevicesController.dispose();
     _notesController.dispose();
+    _gymOwnerNameController.dispose();
+    _gymOwnerUsernameController.dispose();
     super.dispose();
   }
 
@@ -128,9 +177,7 @@ class _OrganizationEditScreenState extends State<OrganizationEditScreen> {
     });
 
     try {
-      final organizationId = int.tryParse(
-        widget.organization['id'].toString(),
-      );
+      final organizationId = int.tryParse(widget.organization['id'].toString());
 
       if (organizationId == null || organizationId <= 0) {
         throw Exception('Invalid organization ID.');
@@ -139,8 +186,8 @@ class _OrganizationEditScreenState extends State<OrganizationEditScreen> {
       final expiryDate = _licenseType == 'lifetime'
           ? null
           : '${_expiryDate.year.toString().padLeft(4, '0')}-'
-              '${_expiryDate.month.toString().padLeft(2, '0')}-'
-              '${_expiryDate.day.toString().padLeft(2, '0')}';
+                '${_expiryDate.month.toString().padLeft(2, '0')}-'
+                '${_expiryDate.day.toString().padLeft(2, '0')}';
 
       await _authService.updateOrganization(
         organizationId: organizationId,
@@ -153,6 +200,10 @@ class _OrganizationEditScreenState extends State<OrganizationEditScreen> {
         maxDevices: int.parse(_maxDevicesController.text.trim()),
         expiresAt: expiryDate,
         notes: _notesController.text,
+        gymOwnerName: _gymOwner == null ? null : _gymOwnerNameController.text,
+        gymOwnerUsername: _gymOwner == null
+            ? null
+            : _gymOwnerUsernameController.text,
       );
 
       if (!mounted) return;
@@ -165,6 +216,146 @@ class _OrganizationEditScreenState extends State<OrganizationEditScreen> {
         _error = e.toString().replaceFirst('Exception: ', '');
         _isSaving = false;
       });
+    }
+  }
+
+  Widget _buildGymOwnerAccountCard() {
+    final owner = _gymOwner;
+
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: Color(0xFFE2E7EF)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.manage_accounts_outlined,
+                  color: Color(0xFFE50914),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'Gym Owner Account',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Refresh Gym Owner account',
+                  onPressed: _isLoadingGymOwner ? null : _loadGymOwner,
+                  icon: const Icon(Icons.refresh),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (_isLoadingGymOwner)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(14),
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            else if (_gymOwnerError != null)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _gymOwnerError!,
+                    style: const TextStyle(color: Color(0xFFE50914)),
+                  ),
+                  TextButton.icon(
+                    onPressed: _loadGymOwner,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ],
+              )
+            else if (owner == null)
+              const Text(
+                'No Gym Owner account was found for this organization.',
+                style: TextStyle(color: Colors.blueGrey),
+              )
+            else ...[
+              _field(
+                controller: _gymOwnerNameController,
+                label: 'Gym Owner Name',
+                validator: (value) {
+                  final name = value?.trim() ?? '';
+                  if (name.isEmpty) return 'Gym Owner name is required';
+                  if (name.length > 150) return 'Maximum 150 characters';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 14),
+              _field(
+                controller: _gymOwnerUsernameController,
+                label: 'Login Username (Email)',
+                keyboardType: TextInputType.emailAddress,
+                validator: (value) {
+                  final username = value?.trim() ?? '';
+                  if (username.isEmpty) return 'Login username is required';
+                  if (username.length > 150 ||
+                      !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+                          .hasMatch(username)) {
+                    return 'Enter a valid email address';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: _showResetGymOwnerPasswordDialog,
+                  icon: const Icon(Icons.lock_reset),
+                  label: const Text('Reset Password'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFE50914),
+                    side: const BorderSide(color: Color(0xFFE50914)),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showResetGymOwnerPasswordDialog() async {
+    final organizationId = int.tryParse(
+      widget.organization['id']?.toString() ?? '',
+    );
+    if (organizationId == null || organizationId <= 0 || _gymOwner == null) {
+      return;
+    }
+
+    final didReset = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _GymOwnerPasswordResetDialog(
+        onSubmit: (newPassword) =>
+            _authService.resetOrganizationGymOwnerPassword(
+              organizationId: organizationId,
+              newPassword: newPassword,
+            ),
+      ),
+    );
+
+    if (didReset == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Gym Owner password reset successfully'),
+          backgroundColor: Color(0xFF16834A),
+        ),
+      );
     }
   }
 
@@ -196,9 +387,9 @@ class _OrganizationEditScreenState extends State<OrganizationEditScreen> {
 
     final isCurrentlyExpired =
         organization['expires_at'] != null &&
-        DateTime.tryParse(
-              organization['expires_at'].toString(),
-            )?.isBefore(DateTime.now()) == true;
+        DateTime.tryParse(organization['expires_at'].toString())
+                ?.isBefore(DateTime.now()) ==
+            true;
 
     return Scaffold(
       appBar: AppBar(
@@ -219,9 +410,7 @@ class _OrganizationEditScreenState extends State<OrganizationEditScreen> {
                 color: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
-                  side: const BorderSide(
-                    color: Color(0xFFE2E7EF),
-                  ),
+                  side: const BorderSide(color: Color(0xFFE2E7EF)),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -304,14 +493,14 @@ class _OrganizationEditScreenState extends State<OrganizationEditScreen> {
                 ),
               ),
               const SizedBox(height: 16),
+              _buildGymOwnerAccountCard(),
+              const SizedBox(height: 16),
               Card(
                 elevation: 0,
                 color: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
-                  side: const BorderSide(
-                    color: Color(0xFFE2E7EF),
-                  ),
+                  side: const BorderSide(color: Color(0xFFE2E7EF)),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -358,8 +547,7 @@ class _OrganizationEditScreenState extends State<OrganizationEditScreen> {
                                     _licenseType = value;
 
                                     if (value != 'lifetime') {
-                                      final today =
-                                          DateUtils.dateOnly(
+                                      final today = DateUtils.dateOnly(
                                         DateTime.now(),
                                       );
 
@@ -386,17 +574,11 @@ class _OrganizationEditScreenState extends State<OrganizationEditScreen> {
                         )
                       else ...[
                         OutlinedButton.icon(
-                          onPressed:
-                              _isSaving ? null : _selectExpiryDate,
+                          onPressed: _isSaving ? null : _selectExpiryDate,
                           icon: const Icon(Icons.calendar_month),
-                          label: Text(
-                            'Expiry date: ${_dateText(_expiryDate)}',
-                          ),
+                          label: Text('Expiry date: ${_dateText(_expiryDate)}'),
                           style: OutlinedButton.styleFrom(
-                            minimumSize: const Size(
-                              double.infinity,
-                              48,
-                            ),
+                            minimumSize: const Size(double.infinity, 48),
                             alignment: Alignment.centerLeft,
                           ),
                         ),
@@ -419,13 +601,9 @@ class _OrganizationEditScreenState extends State<OrganizationEditScreen> {
                         label: 'Maximum Devices',
                         keyboardType: TextInputType.number,
                         validator: (value) {
-                          final count = int.tryParse(
-                            value?.trim() ?? '',
-                          );
+                          final count = int.tryParse(value?.trim() ?? '');
 
-                          if (count == null ||
-                              count < 1 ||
-                              count > 1000) {
+                          if (count == null || count < 1 || count > 1000) {
                             return 'Enter between 1 and 1000';
                           }
 
@@ -468,9 +646,7 @@ class _OrganizationEditScreenState extends State<OrganizationEditScreen> {
                           ),
                         )
                       : const Icon(Icons.save_outlined),
-                  label: Text(
-                    _isSaving ? 'Saving...' : 'Save Changes',
-                  ),
+                  label: Text(_isSaving ? 'Saving...' : 'Save Changes'),
                 ),
               ),
               const SizedBox(height: 24),
@@ -478,6 +654,166 @@ class _OrganizationEditScreenState extends State<OrganizationEditScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _GymOwnerPasswordResetDialog extends StatefulWidget {
+  const _GymOwnerPasswordResetDialog({required this.onSubmit});
+
+  final Future<void> Function(String newPassword) onSubmit;
+
+  @override
+  State<_GymOwnerPasswordResetDialog> createState() =>
+      _GymOwnerPasswordResetDialogState();
+}
+
+class _GymOwnerPasswordResetDialogState
+    extends State<_GymOwnerPasswordResetDialog> {
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmController = TextEditingController();
+
+  bool _isSaving = false;
+  bool _obscurePassword = true;
+  String? _passwordError;
+  String? _confirmError;
+  String? _submitError;
+
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    _confirmController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_isSaving) return;
+
+    final password = _passwordController.text;
+    final confirmation = _confirmController.text;
+    final passwordError = password.isEmpty
+        ? 'New password is required'
+        : password.length < 8
+        ? 'Password must be at least 8 characters'
+        : password.length > 72
+        ? 'Password must not exceed 72 characters'
+        : null;
+    final confirmError = confirmation.isEmpty
+        ? 'Please confirm the new password'
+        : confirmation != password
+        ? 'Passwords do not match'
+        : null;
+
+    setState(() {
+      _passwordError = passwordError;
+      _confirmError = confirmError;
+      _submitError = null;
+    });
+
+    if (passwordError != null || confirmError != null) return;
+
+    setState(() => _isSaving = true);
+    try {
+      await widget.onSubmit(password);
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isSaving = false;
+        _submitError = error.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Reset Gym Owner Password'),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _passwordController,
+              obscureText: _obscurePassword,
+              keyboardType: TextInputType.visiblePassword,
+              enabled: !_isSaving,
+              onChanged: (_) {
+                if (_passwordError != null) {
+                  setState(() => _passwordError = null);
+                }
+              },
+              decoration: InputDecoration(
+                labelText: 'New Password',
+                border: const OutlineInputBorder(),
+                errorText: _passwordError,
+                suffixIcon: IconButton(
+                  tooltip: _obscurePassword ? 'Show password' : 'Hide password',
+                  icon: Icon(
+                    _obscurePassword
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                  ),
+                  onPressed: _isSaving
+                      ? null
+                      : () => setState(
+                          () => _obscurePassword = !_obscurePassword,
+                        ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _confirmController,
+              obscureText: _obscurePassword,
+              keyboardType: TextInputType.visiblePassword,
+              enabled: !_isSaving,
+              onChanged: (_) {
+                if (_confirmError != null) {
+                  setState(() => _confirmError = null);
+                }
+              },
+              decoration: InputDecoration(
+                labelText: 'Confirm New Password',
+                border: const OutlineInputBorder(),
+                errorText: _confirmError,
+              ),
+              onSubmitted: (_) => _submit(),
+            ),
+            if (_submitError != null) ...[
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _submitError!,
+                  style: const TextStyle(color: Color(0xFFE50914)),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isSaving ? null : () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: _isSaving ? null : _submit,
+          child: _isSaving
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Text('Reset Password'),
+        ),
+      ],
     );
   }
 }

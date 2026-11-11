@@ -240,6 +240,9 @@ class AuthService {
   Future<Map<String, dynamic>> createOrganization({
     required String name,
     required String slug,
+    required String adminName,
+    required String adminUsername,
+    required String adminPassword,
     String? email,
     String? phone,
     String? address,
@@ -261,6 +264,9 @@ class AuthService {
         data: {
           'name': name.trim(),
           'slug': slug.trim().toLowerCase(),
+          'adminName': adminName.trim(),
+          'adminUsername': adminUsername.trim().toLowerCase(),
+          'adminPassword': adminPassword,
           'email': email?.trim(),
           'phone': phone?.trim(),
           'address': address?.trim(),
@@ -298,6 +304,77 @@ class AuthService {
     }
   }
 
+  Future<Map<String, dynamic>?> getOrganizationGymOwner({
+    required int organizationId,
+  }) async {
+    try {
+      final token = await getToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('Please sign in again.');
+      }
+
+      final response = await _dio.get(
+        '/organizations/$organizationId/gym-owner',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+      final data = response.data;
+
+      if (data is! Map<String, dynamic> || data['success'] != true) {
+        throw Exception(
+          data is Map
+              ? data['message']?.toString() ?? 'Invalid Gym Owner response.'
+              : 'Unexpected server response.',
+        );
+      }
+
+      final owner = data['gymOwner'];
+      if (owner == null) return null;
+      if (owner is! Map) {
+        throw Exception('Invalid Gym Owner account data.');
+      }
+      return Map<String, dynamic>.from(owner);
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map && data['message'] != null) {
+        throw Exception(data['message'].toString());
+      }
+      throw Exception(e.message ?? 'Unable to load Gym Owner account.');
+    }
+  }
+
+  Future<void> resetOrganizationGymOwnerPassword({
+    required int organizationId,
+    required String newPassword,
+  }) async {
+    try {
+      final token = await getToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('Please sign in again.');
+      }
+
+      final response = await _dio.patch(
+        '/organizations/$organizationId/gym-owner/reset-password',
+        data: {'newPassword': newPassword},
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+      final data = response.data;
+
+      if (data is! Map<String, dynamic> || data['success'] != true) {
+        throw Exception(
+          data is Map
+              ? data['message']?.toString() ?? 'Password reset failed.'
+              : 'Unexpected server response.',
+        );
+      }
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map && data['message'] != null) {
+        throw Exception(data['message'].toString());
+      }
+      throw Exception(e.message ?? 'Unable to reset Gym Owner password.');
+    }
+  }
+
   Future<Map<String, dynamic>> updateOrganization({
     required int organizationId,
     required String name,
@@ -310,6 +387,8 @@ class AuthService {
     String? expiresAt,
     String? notes,
     int? trialDays,
+    String? gymOwnerName,
+    String? gymOwnerUsername,
   }) async {
     try {
       final token = await getToken();
@@ -326,6 +405,15 @@ class AuthService {
         'address': address?.trim(),
       };
 
+      if (gymOwnerName != null || gymOwnerUsername != null) {
+        if (gymOwnerName == null || gymOwnerUsername == null) {
+          throw Exception('Gym Owner name and username must both be provided.');
+        }
+        requestData.addAll({
+          'gymOwnerName': gymOwnerName.trim(),
+          'gymOwnerUsername': gymOwnerUsername.trim().toLowerCase(),
+        });
+      }
       final bool licenseFieldsProvided =
           licenseType != null ||
           maxDevices != null ||

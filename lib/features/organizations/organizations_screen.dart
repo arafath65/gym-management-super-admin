@@ -85,12 +85,10 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
         organization['slug'],
         organization['email'],
       ].any(
-        (value) =>
-            value?.toString().toLowerCase().contains(query) ?? false,
+        (value) => value?.toString().toLowerCase().contains(query) ?? false,
       );
     }).toList();
   }
-
 
   Color _licenseColor(String? status) {
     switch (status?.toLowerCase()) {
@@ -124,14 +122,18 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
     final emailController = TextEditingController();
     final phoneController = TextEditingController();
     final addressController = TextEditingController();
+    final adminNameController = TextEditingController();
+    final adminUsernameController = TextEditingController();
+    final adminPasswordController = TextEditingController();
+    final confirmAdminPasswordController = TextEditingController();
     final trialDaysController = TextEditingController(text: '14');
     final maxDevicesController = TextEditingController(text: '2');
     final notesController = TextEditingController();
 
     String licenseType = 'trial';
-    DateTime selectedExpiryDate =
-        DateTime.now().add(const Duration(days: 14));
+    DateTime selectedExpiryDate = DateTime.now().add(const Duration(days: 14));
     bool isSaving = false;
+    bool obscureAdminPassword = true;
     String? formError;
 
     try {
@@ -155,14 +157,15 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
                   final response = await _authService.createOrganization(
                     name: nameController.text,
                     slug: slugController.text,
+                    adminName: adminNameController.text,
+                    adminUsername: adminUsernameController.text,
+                    adminPassword: adminPasswordController.text,
                     email: emailController.text,
                     phone: phoneController.text,
                     address: addressController.text,
                     licenseType: licenseType,
-                    trialDays:
-                        int.parse(trialDaysController.text.trim()),
-                    maxDevices:
-                        int.parse(maxDevicesController.text.trim()),
+                    trialDays: int.parse(trialDaysController.text.trim()),
+                    maxDevices: int.parse(maxDevicesController.text.trim()),
                     expiresAt: licenseType == 'lifetime'
                         ? null
                         : '${selectedExpiryDate.year.toString().padLeft(4, '0')}-${selectedExpiryDate.month.toString().padLeft(2, '0')}-${selectedExpiryDate.day.toString().padLeft(2, '0')}',
@@ -177,8 +180,7 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
 
                   setDialogState(() {
                     isSaving = false;
-                    formError =
-                        e.toString().replaceFirst('Exception: ', '');
+                    formError = e.toString().replaceFirst('Exception: ', '');
                   });
                 }
               }
@@ -264,6 +266,99 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
                           ),
                           const SizedBox(height: 20),
                           const Text(
+                            'Initial Gym Admin Account',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          _formField(
+                            controller: adminNameController,
+                            label: 'Gym Admin Name',
+                            required: true,
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Gym Admin name is required';
+                              }
+                              if (value.trim().length > 150) {
+                                return 'Maximum 150 characters';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 14),
+                          _formField(
+                            controller: adminUsernameController,
+                            label: 'Admin Username (Email)',
+                            required: true,
+                            keyboardType: TextInputType.emailAddress,
+                            validator: (value) {
+                              final username = value?.trim() ?? '';
+                              if (username.isEmpty) {
+                                return 'Gym Admin username is required';
+                              }
+                              if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+                                  .hasMatch(username)) {
+                                return 'Enter a valid email address';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 14),
+                          _formField(
+                            controller: adminPasswordController,
+                            label: 'Initial Admin Password',
+                            required: true,
+                            keyboardType: TextInputType.visiblePassword,
+                            obscureText: obscureAdminPassword,
+                            suffixIcon: IconButton(
+                              tooltip: obscureAdminPassword
+                                  ? 'Show password'
+                                  : 'Hide password',
+                              icon: Icon(
+                                obscureAdminPassword
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
+                              ),
+                              onPressed: () {
+                                setDialogState(() {
+                                  obscureAdminPassword = !obscureAdminPassword;
+                                });
+                              },
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Initial Admin password is required';
+                              }
+                              if (value.length < 8) {
+                                return 'Password must be at least 8 characters';
+                              }
+                              if (value.length > 72) {
+                                return 'Password must not exceed 72 characters';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 14),
+                          _formField(
+                            controller: confirmAdminPasswordController,
+                            label: 'Confirm Admin Password',
+                            required: true,
+                            keyboardType: TextInputType.visiblePassword,
+                            obscureText: obscureAdminPassword,
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please confirm the Admin password';
+                              }
+                              if (value != adminPasswordController.text) {
+                                return 'Passwords do not match';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 20),
+                          const Text(
                             'License Configuration',
                             style: TextStyle(
                               fontSize: 15,
@@ -305,16 +400,15 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
                                         if (value != 'lifetime') {
                                           final days = value == 'trial'
                                               ? int.tryParse(
-                                                    trialDaysController.text,
-                                                  ) ?? 14
+                                                      trialDaysController.text,
+                                                    ) ??
+                                                    14
                                               : value == 'monthly'
-                                                  ? 30
-                                                  : 365;
+                                              ? 30
+                                              : 365;
 
-                                          selectedExpiryDate =
-                                              DateTime.now().add(
-                                            Duration(days: days),
-                                          );
+                                          selectedExpiryDate = DateTime.now()
+                                              .add(Duration(days: days));
                                         }
                                       });
                                     }
@@ -333,10 +427,7 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
                             const SizedBox(height: 8),
                             OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
-                                minimumSize: const Size(
-                                  double.infinity,
-                                  48,
-                                ),
+                                minimumSize: const Size(double.infinity, 48),
                                 alignment: Alignment.centerLeft,
                               ),
                               onPressed: isSaving
@@ -344,8 +435,10 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
                                   : () async {
                                       final picked = await showDatePicker(
                                         context: dialogContext,
-                                        initialDate: selectedExpiryDate
-                                                .isBefore(DateTime.now())
+                                        initialDate:
+                                            selectedExpiryDate.isBefore(
+                                              DateTime.now(),
+                                            )
                                             ? DateTime.now()
                                             : selectedExpiryDate,
                                         firstDate: DateTime.now(),
@@ -405,13 +498,9 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
                               label: 'Trial Duration (Days)',
                               keyboardType: TextInputType.number,
                               validator: (value) {
-                                final days = int.tryParse(
-                                  value?.trim() ?? '',
-                                );
+                                final days = int.tryParse(value?.trim() ?? '');
 
-                                if (days == null ||
-                                    days < 1 ||
-                                    days > 365) {
+                                if (days == null || days < 1 || days > 365) {
                                   return 'Enter between 1 and 365 days';
                                 }
                                 return null;
@@ -424,13 +513,9 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
                             label: 'Maximum Devices',
                             keyboardType: TextInputType.number,
                             validator: (value) {
-                              final count = int.tryParse(
-                                value?.trim() ?? '',
-                              );
+                              final count = int.tryParse(value?.trim() ?? '');
 
-                              if (count == null ||
-                                  count < 1 ||
-                                  count > 1000) {
+                              if (count == null || count < 1 || count > 1000) {
                                 return 'Enter between 1 and 1000';
                               }
                               return null;
@@ -511,6 +596,10 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
       emailController.dispose();
       phoneController.dispose();
       addressController.dispose();
+      adminNameController.dispose();
+      adminUsernameController.dispose();
+      adminPasswordController.dispose();
+      confirmAdminPasswordController.dispose();
       trialDaysController.dispose();
       maxDevicesController.dispose();
       notesController.dispose();
@@ -525,29 +614,29 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
     int maxLines = 1,
     String? Function(String?)? validator,
     ValueChanged<String>? onChanged,
+    bool obscureText = false,
+    Widget? suffixIcon,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       maxLines: maxLines,
+      obscureText: obscureText,
       onChanged: onChanged,
       validator: validator,
       decoration: InputDecoration(
         labelText: required ? '$label *' : label,
         border: const OutlineInputBorder(),
         isDense: true,
+        suffixIcon: suffixIcon,
       ),
     );
   }
 
-  Future<void> _openEditOrganization(
-    Map<String, dynamic> organization,
-  ) async {
+  Future<void> _openEditOrganization(Map<String, dynamic> organization) async {
     final updated = await Navigator.of(context).push<bool>(
       MaterialPageRoute<bool>(
-        builder: (_) => OrganizationEditScreen(
-          organization: organization,
-        ),
+        builder: (_) => OrganizationEditScreen(organization: organization),
       ),
     );
 
@@ -585,9 +674,9 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
         content: Text(
           isDeactivating
               ? 'Are you sure you want to deactivate $organizationName? '
-                  'New device activations will be blocked.'
+                    'New device activations will be blocked.'
               : 'Are you sure you want to reactivate $organizationName? '
-                  'Device activation will be allowed again if its license is valid.',
+                    'Device activation will be allowed again if its license is valid.',
         ),
         actions: [
           TextButton(
@@ -601,9 +690,7 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
                   ? const Color(0xFFE50914)
                   : const Color(0xFF16834A),
             ),
-            child: Text(
-              isDeactivating ? 'Deactivate' : 'Reactivate',
-            ),
+            child: Text(isDeactivating ? 'Deactivate' : 'Reactivate'),
           ),
         ],
       ),
@@ -612,9 +699,7 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
     if (confirmed != true || !mounted) return;
 
     try {
-      final organizationId = int.tryParse(
-        organization['id'].toString(),
-      );
+      final organizationId = int.tryParse(organization['id'].toString());
 
       if (organizationId == null || organizationId <= 0) {
         throw Exception('Invalid organization ID.');
@@ -644,18 +729,14 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            e.toString().replaceFirst('Exception: ', ''),
-          ),
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
           backgroundColor: const Color(0xFFE50914),
         ),
       );
     }
   }
 
-  Widget _organizationStatusMenu(
-    Map<String, dynamic> organization,
-  ) {
+  Widget _organizationStatusMenu(Map<String, dynamic> organization) {
     final isInactive =
         organization['status']?.toString().toLowerCase() == 'inactive';
 
@@ -689,9 +770,7 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
                   ? const Color(0xFF16834A)
                   : const Color(0xFFE50914),
             ),
-            title: Text(
-              isInactive ? 'Reactivate' : 'Deactivate',
-            ),
+            title: Text(isInactive ? 'Reactivate' : 'Deactivate'),
           ),
         ),
       ],
@@ -701,6 +780,7 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
       ),
     );
   }
+
   Widget _buildOrganizationCard(Map<String, dynamic> organization) {
     final name = organization['name']?.toString() ?? 'Unnamed Organization';
     final code = organization['organization_code']?.toString() ?? '-';
@@ -794,19 +874,13 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: _infoItem(
-                    'License Type',
-                    licenseType.toUpperCase(),
-                  ),
+                  child: _infoItem('License Type', licenseType.toUpperCase()),
                 ),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _infoItem(
-                        'License Status',
-                        licenseStatus.toUpperCase(),
-                      ),
+                      _infoItem('License Status', licenseStatus.toUpperCase()),
                       const SizedBox(height: 11),
                       _infoItem('Maximum Devices', maxDevices),
                     ],
@@ -848,24 +922,19 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
       ),
     );
   }
+
   Widget _infoItem(String label, String value) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(
-            color: Colors.blueGrey,
-            fontSize: 11,
-          ),
+          style: const TextStyle(color: Colors.blueGrey, fontSize: 11),
         ),
         const SizedBox(height: 4),
         Text(
           value,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
         ),
       ],
     );
@@ -881,10 +950,7 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(
-                color: Colors.blueGrey,
-                fontSize: 12,
-              ),
+              style: const TextStyle(color: Colors.blueGrey, fontSize: 12),
             ),
           ),
         ],
@@ -970,6 +1036,7 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
       },
     );
   }
+
   @override
   Widget build(BuildContext context) {
     final filteredCount = _filteredOrganizations.length;
@@ -1050,8 +1117,7 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
                       ),
                     );
 
-                    final statusFilter =
-                        DropdownButtonFormField<String>(
+                    final statusFilter = DropdownButtonFormField<String>(
                       initialValue: _statusFilter,
                       decoration: const InputDecoration(
                         labelText: 'Status',
@@ -1072,10 +1138,7 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
                           value: 'inactive',
                           child: Text('Inactive'),
                         ),
-                        DropdownMenuItem(
-                          value: 'all',
-                          child: Text('All'),
-                        ),
+                        DropdownMenuItem(value: 'all', child: Text('All')),
                       ],
                       onChanged: (value) {
                         if (value != null) {
@@ -1091,10 +1154,7 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
                         children: [
                           Expanded(child: searchField),
                           const SizedBox(width: 14),
-                          SizedBox(
-                            width: 190,
-                            child: statusFilter,
-                          ),
+                          SizedBox(width: 190, child: statusFilter),
                         ],
                       );
                     }
@@ -1108,7 +1168,8 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
                       ],
                     );
                   },
-                ),              ],
+                ),
+              ],
             ),
           ),
           Expanded(child: _buildContent()),
