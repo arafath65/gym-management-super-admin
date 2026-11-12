@@ -345,6 +345,8 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
 
   Future<void> _showActivationCode(
     String code, {
+    required String organizationName,
+    required String deviceName,
     String title = 'Device Activation Code',
   }) async {
     await showDialog<void>(
@@ -356,6 +358,19 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Text(
+                'GYM: $organizationName',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                'DEVICE: $deviceName',
+                style: const TextStyle(color: Colors.blueGrey, fontSize: 13),
+              ),
+              const SizedBox(height: 14),
               const Text(
                 'Share this code with the device user. '
                 'It will not be displayed again.',
@@ -382,7 +397,7 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
               ),
               const SizedBox(height: 12),
               const Text(
-                'Valid for 24 hours.',
+                'Valid for 15 minutes from generation. Use it before it expires.',
                 style: TextStyle(color: Colors.blueGrey, fontSize: 12),
               ),
             ],
@@ -723,12 +738,33 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
 
     if (!mounted || result == null) return;
 
+    final registeredDevice = result['device'];
+
+    final registeredOrganization = _organizations.firstWhere(
+      (organization) =>
+          int.tryParse(organization['id']?.toString() ?? '') ==
+          selectedOrganizationId,
+      orElse: () => <String, dynamic>{},
+    );
+
+    final organizationName =
+        registeredOrganization['name']?.toString() ?? 'Unknown organization';
+
+    final deviceName = registeredDevice is Map
+        ? registeredDevice['device_name']?.toString() ?? 'Registered device'
+        : 'Registered device';
+
     await _loadData(showLoading: false);
 
     final activationCode = result['activation_code']?.toString();
 
     if (activationCode != null && activationCode.isNotEmpty) {
-      await _showActivationCode(activationCode, title: 'Device Registered');
+      await _showActivationCode(
+        activationCode,
+        title: 'Device Registered',
+        organizationName: organizationName,
+        deviceName: deviceName,
+      );
     }
   }
 
@@ -808,6 +844,9 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
           title: action == 'reactivate'
               ? 'Device Reactivated'
               : 'New Activation Code',
+          organizationName:
+              device['organization_name']?.toString() ?? 'Unknown organization',
+          deviceName: device['device_name']?.toString() ?? 'Registered device',
         );
       }
     } catch (e) {

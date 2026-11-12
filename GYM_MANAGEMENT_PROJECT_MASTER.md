@@ -1,9 +1,9 @@
 # GYM MANAGEMENT PROJECT MASTER
 
-**Technical handover and continuation reference**  
-**Last updated:** 11 November 2026 (Gym Owner onboarding, editable owner account and password-reset milestone)  
-**Project owner / development context:** Innovex Fitness Center / Innovex Web Solutions  
-**Primary development environment:** Windows laptop, PowerShell, Flutter, Node.js and MySQL 8. The latest active workstation is the home laptop; see Section 21 for its project paths.
+**Technical handover and continuation reference**
+**Last updated:** 12 November 2026 (15-minute device activation, activation without Organization ID, server-backed startup device validation)
+**Project owner / development context:** Innovex Fitness Center / Innovex Web Solutions
+**Primary development environment:** Office Windows laptop, PowerShell, Flutter, Node.js and MySQL 8. Current office-laptop project paths are recorded in Section 31. Do not assume the home laptop has these latest unpushed changes.
 
 > **Purpose.** This document is the durable technical handover for continuing the Gym Management project in a new ChatGPT conversation. It records decisions, source paths, database facts, endpoints, implementation state, debugging history and pending work. It deliberately distinguishes verified implementation from requirements that have only been discussed. Unknown schema details are identified as unknown rather than guessed.
 
@@ -685,82 +685,146 @@ The observed 21-row catalog belongs to the Gym Staff permission system. It does 
 
 ---
 
-## 10. Device Registration and Validation
+## 10. Device Registration, Activation and Server Validation
 
-### Device registration (implemented)
+### 10.1 Device registration
 
 Platform Admin registration endpoint:
 
 - `POST /api/devices/register`
-- Required body fields include `organization_id`, `device_uuid`, `device_name`, and `device_type`.
+- Required body fields: `organization_id`, `device_uuid`, `device_name`, `device_type`.
 - `registered_branch_id` is optional.
-- Known device types in Flutter: `android_tablet`, `android_mobile`, `other`.
+- Known device types: `android_tablet`, `android_mobile`, `other`.
 
-The registration controller validates organization and branch ownership, checks organization/license state and current active-device quota, inserts a pending device, and returns an activation code. Activation code is stored as a SHA-256 hash, with a 24-hour expiry. The plaintext code is returned to the admin once for sharing.
+The registration controller validates organization and branch ownership, checks organization/license state and active-device quota, inserts a pending device, and returns a one-time activation code. The code is stored as a SHA-256 hash; plaintext is returned only in the registration response for the Super Admin to share.
 
-### Device activation (implemented)
+**Current expiry policy (12 November 2026 source update):** newly registered device activation codes expire after **15 minutes**. Regenerated activation codes also expire after **15 minutes**. Both SQL write paths use `DATE_ADD(NOW(), INTERVAL 15 MINUTE)`.
+
+Important rollout detail: pending codes created before this change retain the `activation_expires_at` value already stored in MySQL. To bring an older pending device onto the 15-minute policy and invalidate its previous code, regenerate its activation code through Super Admin. A database table/schema change is not required because `devices.activation_expires_at` already exists.
+
+The code generator remains `crypto.randomBytes(5).toString("hex").toUpperCase()` (10 hexadecimal characters). The hash, UUID binding and expiry are checked by the API. Rate limiting for repeated activation attempts remains a security-hardening item.
+
+### 10.2 Gym App activation — code only, no Organization ID
 
 Endpoint:
 
 - `POST /api/devices/activate`
 
-This endpoint is intentionally separate from platform-admin routes and is protected by `checkOrganizationLicense` middleware plus `activateDevice` controller logic.
+The route is intentionally separate from Platform Admin management routes. The prior `checkOrganizationLicense` route middleware has been removed because it required an Organization ID before the controller could identify the organization. The `activateDevice` controller performs the organization and license checks itself.
 
-Observed activation flow:
+Request body is now:
 
-1. Require `organization_id`, `device_uuid`, and `activation_code`.
-2. Begin a DB transaction.
-3. Lock the latest organization license (`FOR UPDATE`).
-4. Require active status, started license and non-expired license.
-5. Count active devices and enforce `max_devices`.
-6. Hash the supplied activation code and find matching pending device.
-7. Reject invalid, expired, or non-pending activation.
-8. Generate a 32-byte random device token and hash it with SHA-256 for DB storage.
-9. Set device status to `active`; store token hash; clear activation code hash and expiry; update `last_seen_at`.
-10. Commit and return the plaintext device token once to the activating app.
+```json
+{
+  "device_uuid": "device-unique-id",
+  "activation_code": "one-time-code"
+}
+```
 
-The device token is not stored plaintext in the database.
+The Gym Owner does **not** need to know or enter an internal Organization ID. The Gym App automatically reads its stable installation UUID from Flutter Secure Storage and sends it with the code.
 
-### Device management endpoints
+Current activation sequence:
 
-- `GET /api/devices/` â€” list with server-side pagination and filters.
-- `POST /api/devices/register` â€” register pending device and return activation code.
-- `POST /api/devices/:deviceId/activation-code` â€” regenerate activation code / reactivate revoked device flow in the management controller.
-- `PATCH /api/devices/:deviceId/revoke` â€” revoke a device.
+1. Require non-empty `device_uuid` and `activation_code`.
+2. Hash the submitted code and find a matching `pending` device by both UUID and activation-code hash.
+3. Derive `organization_id` from the matched device row; do not trust an organization ID supplied by the Gym App.
+4. Begin/continue a DB transaction and lock the organization and latest license (`FOR UPDATE`).
+5. Require active organization, an existing active license, license start reached, and license not expired.
+6. Count active devices and enforce the latest license's `max_devices`.
+7. Re-select/lock the matching device using organization, UUID and activation hash; reject invalid, expired or non-pending activation.
+8. Generate a 32-byte cryptographically random device token; store only its SHA-256 hash in `devices.device_token_hash`.
+9. Set device status to `active`; clear activation code hash and expiry; update `last_seen_at`.
+10. Commit and return the plaintext device token once, along with organization and device identity.
 
-All management endpoints are individually protected by `authenticatePlatformAdmin`; the `/activate` route remains the gym-app activation flow.
+The device token is saved in Flutter Secure Storage. It must never be logged or stored plaintext in MySQL.
 
-### Latest live quota-test setup (10 November 2026)
+### 10.3 Super Admin activation-code popup
 
-The user has now run the Super Admin Flutter app on the home laptop and:
+The Super Admin device screen now displays the following when a device is registered or a new code is generated:
 
-1. Created a new organization with a license/device limit of **1**.
-2. Registered **two tablet devices** under that organization.
-3. Confirmed that both devices currently appear with status `pending`.
+- Gym/organization name.
+- Registered device name.
+- One-time activation code with Copy Code action.
+- A message stating that the code is valid for 15 minutes from generation.
 
-This is consistent with the inspected controller: the registration quota helper counts only devices where `status = 'active'`; pending devices do not consume an active-device slot. Both registrations can therefore exist while the active count is zero.
+The registration popup obtains the organization name from the selected organization and the device name from the registration response. Regeneration/reactivation uses organization and device names returned with the device data. The popup continues to disclose the plaintext code once; the API stores only the hash.
 
-**The max-device activation test has not yet been completed.** The expected test is to activate one pending tablet successfully, then attempt to activate the second and verify HTTP 403 with code `DEVICE_LIMIT_REACHED`, `device_limit: 1` and `active_devices: 1`. After revoking the active device, retrying the second activation should be tested with a still-valid activation code.
+The popup currently displays a 15-minute validity message; a live countdown timer is not implemented.
 
-### Device audit gap confirmed from current API source
+### 10.4 Device token validation at Gym App startup
 
-- `registerDevice`, activation-code regeneration/reactivation and `revokeDevice` call `writePlatformAuditLog` using the same DB transaction as their changes.
-- `activateDevice` currently updates the device to `active` and commits without writing an audit event.
-- Activation is initiated by the Gym App/device and must not be falsely attributed to a Platform Admin. The correct audit destination and actor representation must be implemented using the operational audit model.
-- Do not store the one-time activation code or plaintext device token in audit records.
+New API endpoint:
+
+- `GET /api/devices/validate`
+- Authentication: `Authorization: Bearer <device-token>` (the device token returned once by successful activation).
+
+New reusable API middleware:
+
+- `src/middleware/deviceAuthMiddleware.js`
+- Export: `authenticateDevice`
+
+The middleware hashes the supplied token and looks it up against `devices.device_token_hash`. It joins the device to its organization and latest license, and validates:
+
+- Device record exists and `devices.status = 'active'`.
+- Organization status is `active`.
+- A latest license exists and its status is `active`.
+- License start time has arrived.
+- License expiry is null or is in the future.
+
+On success it populates `req.device` with device ID, organization ID/name, UUID, device name and status. `GET /api/devices/validate` uses this middleware and returns the verified organization/device identity. The validation route is placed before `router.use(authenticatePlatformAdmin)` so it accepts a Gym App device token, not a Platform Admin JWT.
+
+The Gym App `DeviceActivationService.validateSavedActivation()` calls this endpoint before `AppEntryScreen` displays the login screen. It checks that returned organization ID, device ID and UUID match the identity saved during activation.
+
+Behavior implemented in the Gym App:
+
+- Missing saved activation: show activation screen.
+- Valid active device and valid organization/license: allow the login screen.
+- Deleted device, invalid device token, pending device or revoked device: clear the saved activation record and return to activation screen.
+- Clearing a rejected activation deletes only the saved activation/token record. The stable device UUID (`gym_device_uuid_v1`) is deliberately preserved for re-registration/reactivation.
+- Inactive organization, missing/inactive/not-yet-started/expired license: block login and show the retry/error screen while retaining the saved activation record, so the same device can recover when the account/license is restored.
+- Network/server validation failure: block login and show retry/error UI, retaining the saved activation record; no offline bypass is allowed.
+
+**Lifecycle scope:** the current implementation performs the server check when `AppEntryScreen` is initialized (app startup/restart). It does not yet add a separate `WidgetsBindingObserver` revalidation on every foreground resume. After changing Dart source, the running emulator app must be hot-restarted or rebuilt/reinstalled before testing the updated code. A hot restart is not the same as merely switching back to an already-running stale app process.
+
+### 10.5 Reusable device middleware — route coverage limitation
+
+`authenticateDevice` is implemented and currently protects `GET /api/devices/validate`. It is intended to be applied to each protected Gym Staff/operational API route when those routes are built. The current Gym Staff authentication/session and operational API surface is not yet implemented, so do not claim every future business endpoint is already protected.
+
+Platform Admin device-management endpoints remain separately protected by `authenticatePlatformAdmin` and Platform Admin permissions. Do not use a Gym device token as a Platform Admin credential or vice versa.
+
+### 10.6 Device management endpoints
+
+- `GET /api/devices/` — list with server-side pagination and filters (Platform Admin).
+- `POST /api/devices/register` — register pending device and return a one-time activation code (Platform Admin).
+- `POST /api/devices/:deviceId/activation-code` — regenerate activation code / reactivate a revoked device (Platform Admin).
+- `PATCH /api/devices/:deviceId/revoke` — revoke a device and clear its device-token hash (Platform Admin).
+- `POST /api/devices/activate` — activate Gym App device using UUID + code only.
+- `GET /api/devices/validate` — verify an activated Gym App device token and organization/license state.
+
+Prefer the Super Admin **Revoke Device** action over physically deleting a row from `devices`. Revocation preserves device identity and audit history while clearing authorization. A deleted row is also rejected at startup because its token hash can no longer be found, but direct database deletion bypasses the intended audit trail.
+
+### 10.7 Latest device-validation test observations (12 November 2026)
+
+- The user deleted a previously registered device row directly from `gym_management_db.devices`.
+- After the API and Gym App validation updates were applied and the Gym App was restarted, the app showed the Activation screen instead of the login screen. This is a positive observation for deleted-device startup validation.
+- The user then re-registered and activated the device with the code-only flow.
+- The user revoked the device through Super Admin and initially observed the Gym App still on the login screen. The user clarified that the latest Gym App code had not been hot-restarted in the emulator. Therefore this was a stale-running-app test, not a confirmed failure of the updated startup validation.
+- **Revoked-device startup validation still needs a repeat test after hot restart/rebuild of the Gym App.** Expected: on next startup the API returns `DEVICE_NOT_ACTIVE`, the app clears the saved activation record but keeps the UUID, and shows Activation.
+- The current database's final device row/status was not supplied after the test; query MySQL before assuming whether the test device is pending, active, revoked or deleted.
+
+### 10.8 Device audit and security follow-ups
+
+- `registerDevice`, activation-code regeneration/reactivation and `revokeDevice` write `platform_audit_logs` in the mutation transaction.
+- `activateDevice` still lacks a device-originated operational audit event. Do not falsely attribute activation to a Platform Admin; design the correct actor representation and write the audit in the activation transaction.
+- `authenticateDevice` currently authenticates a bearer device token and checks device/org/license status. Attach it to every protected Gym Staff endpoint when implemented.
+- Add rate limiting or attempt throttling for public activation attempts; do not log activation codes or plaintext device tokens.
+- The existing one-active-device/two-pending-device quota test remains distinct and is not yet recorded as passed.
 
 ### Device list query behavior
 
 Known filters: `status`, `organizationId`, `branchId`, `search`, `page`, `limit`.
 
-Page size values: 25, 50, 100. The response includes:
-
-- `devices`
-- `pagination` (`page`, `limit`, `total`, `totalPages`, `hasPreviousPage`, `hasNextPage`)
-- `statusCounts` (`all`, `pending`, `active`, `revoked`)
-- `filters`
-
-The status counts intentionally ignore the currently selected status while respecting the other filters, so dashboard/filter totals do not collapse to just the selected status.
+Page size values: 25, 50, 100. The response includes `devices`, `pagination`, `statusCounts` (`all`, `pending`, `active`, `revoked`) and `filters`. Status counts intentionally ignore the currently selected status while respecting other filters.
 
 ---
 
@@ -1031,11 +1095,12 @@ The missing route-level auth is a security follow-up, as discussed in section 8.
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| POST | `/api/devices/activate` | Organization license middleware; not platform-admin JWT | Activate gym app device |
-| GET | `/api/devices/` | Platform admin | Search/filter/paginate devices |
-| POST | `/api/devices/register` | Platform admin | Register pending device |
-| POST | `/api/devices/:deviceId/activation-code` | Platform admin | Regenerate code/reactivate flow |
-| PATCH | `/api/devices/:deviceId/revoke` | Platform admin | Revoke device |
+| POST | `/api/devices/activate` | Gym device UUID + one-time activation code; no Platform Admin JWT | Activate Gym App device; organization derived from matching device record |
+| GET | `/api/devices/validate` | Bearer device token | Validate current device, organization and latest license |
+| GET | `/api/devices/` | Platform Admin JWT + `devices.view` | Search/filter/paginate devices |
+| POST | `/api/devices/register` | Platform Admin JWT + `devices.register` | Register pending device and return one-time activation code |
+| POST | `/api/devices/:deviceId/activation-code` | Platform Admin JWT + `devices.activation_code.regenerate` | Regenerate code/reactivate revoked device flow |
+| PATCH | `/api/devices/:deviceId/revoke` | Platform Admin JWT + `devices.revoke` | Revoke device and invalidate device token |
 
 Register body observed from Flutter:
 
@@ -1049,17 +1114,18 @@ Register body observed from Flutter:
 }
 ```
 
-Activation body observed in the controller:
+Activation body (current, 12 November 2026):
 
 ```json
 {
-  "organization_id": 1,
   "device_uuid": "device-unique-id",
   "activation_code": "one-time-code"
 }
 ```
 
-Successful activation returns a `device_token` once. Store it securely in the gym device app; the DB stores its hash.
+Activation code validity: 15 minutes for newly registered or regenerated codes. Existing pending codes created before the 15-minute change retain their previously stored expiry until regenerated or expired.
+
+Successful activation returns a `device_token` once. The Gym App stores it in Flutter Secure Storage; MySQL stores only its SHA-256 hash. The Gym App calls `GET /api/devices/validate` at startup before showing login.
 
 ### Licenses
 
@@ -1778,8 +1844,8 @@ This section is the latest release checkpoint and supersedes earlier statements 
 
 ### 29.1 API repository — local changes ready for release
 
-Repository: `gym_management_api`  
-Remote: `https://github.com/arafath65/gym-management-api.git`  
+Repository: `gym_management_api`
+Remote: `https://github.com/arafath65/gym-management-api.git`
 Branch at release check: `main`, tracking `origin/main` with no reported ahead/behind commits. Seven files are modified locally and remain uncommitted/unpushed:
 
 - `src/controllers/branchController.js`
@@ -1839,8 +1905,8 @@ Verified platform audit entries:
 
 ### 29.5 Super Admin Flutter — Branch Management UI
 
-Repository: `gym_management_super_admin`  
-Remote: `https://github.com/arafath65/gym-management-super-admin.git`  
+Repository: `gym_management_super_admin`
+Remote: `https://github.com/arafath65/gym-management-super-admin.git`
 Branch at release check: `main`, tracking `origin/main` with no reported ahead/behind commits.
 
 Local uncommitted/unpushed changes:
@@ -1865,8 +1931,8 @@ The user reported Branch Management as functionally acceptable for this release 
 
 ### 29.6 Gym App repository — no release changes
 
-Repository: `gym_management_app`  
-Remote: `https://github.com/arafath65/gym-management-apps.git`  
+Repository: `gym_management_app`
+Remote: `https://github.com/arafath65/gym-management-apps.git`
 Branch at release check: `main`, tracking `origin/main`, working tree clean. No modified or untracked files were found. `flutter analyze` completed with **No issues found**. No new commit is required because there are no Gym App changes to publish.
 
 ### 29.7 Release validation summary
@@ -2017,6 +2083,257 @@ Do not use `git add .`. Do not stage `.env`, passwords, JWTs, generated output, 
 ### 30.10 Exact continuation point
 
 The current Super Admin onboarding milestone is complete according to the user's confirmation and has passed the reported static validation. The next practical verification is the first branch creation for Fitness Mania (or another fresh test organization) to verify automatic Gym Owner branch assignment and audit. In parallel, continue the separate Gym Staff authentication design; do not start membership modules before the onboarding/auth/device foundations are secure.
+
+---
+
+**End of updated master handover document.**
+
+---
+
+## 31. Current Office-Laptop Checkpoint — Code-Only Activation, 15-Minute Codes and Device Validation (12 November 2026)
+
+This is the latest authoritative checkpoint for the office laptop. It supersedes older statements in Sections 10, 17, 18, 21, 23, 24, 26, 29 and 30 wherever activation, device validation, current workstation, repository status or next steps differ. The preceding sections remain as historical milestones unless explicitly updated above.
+
+### 31.1 Current workstation and project paths
+
+The active workstation is the **office laptop**. Use these complete paths in PowerShell commands; the user requested that every command include the full project path so they do not have to change directories manually.
+
+```text
+C:\Users\Pradeep\Documents\INNOVEX WEB\Flutter Projects\gym_management_api
+C:\Users\Pradeep\Documents\INNOVEX WEB\Flutter Projects\gym_management_super_admin
+C:\Users\Pradeep\Documents\INNOVEX WEB\Flutter Projects\gym_management_app
+```
+
+Repositories (separate Git histories; push each independently):
+
+| Project | Remote |
+|---|---|
+| API | `https://github.com/arafath65/gym-management-api.git` |
+| Super Admin | `https://github.com/arafath65/gym-management-super-admin.git` |
+| Gym App | `https://github.com/arafath65/gym-management-apps.git` |
+
+Current office-laptop environment: Node.js `v24.20.0`, npm `11.19.0`, Flutter `3.47.7`, Dart `3.13.5`, MySQL 8.
+
+### 31.2 Product decisions confirmed on 12 November
+
+- Gym Owner must enter **only the one-time activation code**; no Organization ID is required or expected to be known by the customer.
+- Gym App automatically reads its stable Device UUID and submits `device_uuid` + `activation_code`.
+- API identifies the organization from the registered device/activation record; the client does not choose or assert the tenant organization.
+- Initial registration and code regeneration both set activation expiry to **15 minutes**.
+- Codes are single-use; the DB stores only the SHA-256 code hash.
+- Super Admin popup shows organization/gym name, device name, activation code, Copy Code action and a 15-minute validity message.
+- Successful activation returns organization/device identity and a random device token once. The app stores the token in Flutter Secure Storage; DB stores only the token hash.
+- A deleted, pending, revoked or otherwise invalid device must not reach the Gym App login screen after startup validation.
+- A device with an inactive organization/license is blocked from login. The local activation record is retained for recovery when the license/organization becomes valid again.
+- Prefer Super Admin's Revoke Device action over direct row deletion so audit history is preserved.
+
+### 31.3 API changes currently applied locally (not yet committed/pushed)
+
+API files changed:
+
+- `src/controllers/deviceController.js`
+  - `/activate` body no longer requires `organization_id`.
+  - Requires non-empty `device_uuid` and `activation_code`.
+  - Hashes the code, looks up a matching pending device by UUID + code hash, and derives `organization_id` from that row.
+  - Retains organization status, latest license, start/expiry and active-device-quota checks in the controller.
+  - Locks/rechecks the matching device during the transaction.
+  - Successful response includes organization id/name, device identity and plaintext device token once.
+- `src/controllers/deviceManagementController.js`
+  - New registration expiry changed from 24 hours to 15 minutes.
+  - Regenerated/reactivated code expiry changed from 24 hours to 15 minutes.
+  - The device schema already had `activation_expires_at`; no DDL change was needed.
+- `src/routes/deviceRoutes.js`
+  - Removed `checkOrganizationLicense` from `/activate` because it required an Organization ID before device lookup; `activateDevice` contains its own organization/license validation.
+  - Added `GET /validate` before Platform Admin route middleware, using device-token authentication.
+- `src/middleware/deviceAuthMiddleware.js` (new)
+  - Exports `authenticateDevice`.
+  - Requires a Bearer token in the generated 64-character hex format, hashes it, and matches `devices.device_token_hash`.
+  - Joins device, organization and latest license, and verifies active device, active organization, active/current license, start time reached and expiry not passed.
+  - Populates `req.device` after successful validation.
+  - It currently protects the new validation endpoint. Apply it to each future protected Gym Staff API route; do not claim future business routes are already secured.
+
+API validation reported successful:
+- `node --check` passed for `deviceController.js`, `deviceManagementController.js` and `deviceRoutes.js` after activation changes.
+- `node --check` passed for the new middleware and updated device routes after device validation was added.
+- `git diff --check` passed after both API patches.
+
+API backup folders created during this session:
+
+```text
+%TEMP%\gym_api_activation_15min_20261112_145722
+%TEMP%\gym_api_device_validation_20261112_163013
+```
+
+Current API Git status last reported:
+
+```text
+ M src/controllers/deviceController.js
+ M src/controllers/deviceManagementController.js
+ M src/routes/deviceRoutes.js
+?? src/middleware/deviceAuthMiddleware.js
+```
+
+The API branch was `main`, tracking `origin/main`, at commit `7db9e1f` (`Add Gym Owner onboarding and account management`) during the office-laptop inspection. Recheck branch, remote and ahead/behind before pushing.
+
+### 31.4 Gym App changes currently applied locally (not yet committed/pushed)
+
+Files/areas changed:
+
+- `lib/features/device_activation/presentation/device_activation_screen.dart`
+  - Device UUID remains visible and selectable with Copy action.
+  - Organization ID input has been removed.
+  - Only Activation Code is entered by the Gym Owner.
+- `lib/core/services/device_activation_service.dart`
+  - `activate()` accepts only `activationCode`.
+  - `POST /api/devices/activate` sends only `device_uuid` and `activation_code`.
+  - UUID is read/generated and retained in Flutter Secure Storage.
+  - Added `clearSavedActivation()` to delete only the activation/session record, preserving the stable UUID.
+  - Added `validateSavedActivation()` to call `GET /api/devices/validate` with the saved Bearer device token.
+  - Compares server-returned organization ID, device ID and UUID with the saved values and requires device status `active`.
+  - Deleted/invalid/revoked/pending device-token cases clear the activation record and return to Activation.
+  - Organization/license failures block login while retaining the activation for recovery.
+  - Network/validation service failures block login and surface a retry/error state without deleting the saved activation.
+- `lib/features/auth/presentation/app_entry_screen.dart`
+  - Startup restore now calls `validateSavedActivation()` instead of trusting local activation data alone.
+  - The login screen is rendered only after successful server validation.
+- Earlier Gym App project setup remains locally changed:
+  - `lib/main.dart`
+  - `lib/features/splash/presentation/splash_screen.dart`
+  - `lib/features/auth/presentation/login_screen.dart` and other auth files under the untracked `lib/features/auth/`
+  - `lib/core/constants/api_constants.dart` and `lib/core/services/device_activation_service.dart` under untracked `lib/core/`
+  - activation screen/service under untracked `lib/features/device_activation/`.
+
+Gym App analysis/validation:
+- Full-project `flutter analyze` passed for Gym App and Super Admin after the activation-code-only and popup changes, before the final device-validation additions.
+- The final corrected device-validation patch passed targeted `flutter analyze` for `device_activation_service.dart` and `app_entry_screen.dart` with `No issues found`.
+- An earlier attempt at the validation patch failed with nullable-int and duplicate-catch diagnostics, but the script restored both files; the corrected patch was subsequently installed and passed.
+- No `WidgetsBindingObserver`/foreground-resume revalidation patch was applied. Current validation happens when `AppEntryScreen` is initialized (startup/restart). For testing updated Dart source, hot restart or rebuild/reinstall the emulator app before judging behavior. Immediate revalidation when returning from another app without restarting is not part of the current implementation.
+
+Gym App backup folders:
+
+```text
+%TEMP%\gym_app_activation_code_only_20261112_151247
+%TEMP%\gym_app_device_validation_final_20261112_171416
+```
+
+Current Gym App Git status last reported:
+
+```text
+ M lib/features/splash/presentation/splash_screen.dart
+ M lib/main.dart
+?? lib/core/
+?? lib/features/auth/
+?? lib/features/device_activation/
+```
+
+Last known Gym App baseline in prior handover was commit `8981e1e` (`Initial commit: Gym Management Flutter App`); recheck actual local `git log` and remote sync before pushing.
+
+### 31.5 Super Admin popup changes currently applied locally (not yet committed/pushed)
+
+File changed:
+
+- `lib/features/devices/device_management_screen.dart`
+  - `_showActivationCode` now receives required `organizationName` and `deviceName`.
+  - Popup displays gym name and device name above the activation code.
+  - Popup states: `Valid for 15 minutes from generation. Use it before it expires.`
+  - Copy Code and one-time display behavior are retained.
+  - Initial registration passes the selected organization name plus device name from the registration response.
+  - Regeneration/reactivation passes organization/device names from the device record.
+  - No Organization ID is requested from the Gym Owner; organization selection remains a Super Admin registration concern.
+
+The targeted `flutter analyze` for `device_management_screen.dart` passed as part of the guarded patch. Backup folder:
+
+```text
+%TEMP%\gym_super_admin_activation_popup_20261112_154558
+```
+
+Current Super Admin Git status last reported:
+
+```text
+ M lib/features/devices/device_management_screen.dart
+```
+
+The master document must be copied to the root as `GYM_MANAGEMENT_PROJECT_MASTER.md` and included in the Super Admin commit. Recheck the current branch, latest local commit, remote and any unrelated changes before staging.
+
+### 31.6 Device validation test observations and accurate status
+
+Observed by the user:
+
+1. A previously registered device row was deleted directly from `gym_management_db.devices` for a test.
+2. After the API/Gym App device-validation changes were installed and the app was restarted, the Gym App showed the Activation screen instead of the old login screen. This is a positive observation that the deleted device token was rejected at startup.
+3. The user then re-registered and activated the device using the code-only process.
+4. The user revoked the device through Super Admin and at first saw login when returning/restarting the Gym App. The user clarified that the updated app had not been hot-restarted after the Dart source changes. Treat this as an outdated running-app test, not a confirmed failure of the new validation code.
+5. Repeat the revoked-device startup test after hot restart/rebuild/reinstall of the Gym App. Expected API response from validation middleware for revoked status is HTTP 403 `DEVICE_NOT_ACTIVE`; the Gym App should clear activation only, preserve UUID and show Activation.
+
+The final current state of the specific test device row was not supplied. Query by UUID before assuming it is still revoked/active/deleted.
+
+### 31.7 Current validation evidence
+
+- API activation-code changes: successful guarded patch; JavaScript syntax checks and `git diff --check` passed.
+- API device validation endpoint/middleware: successful guarded patch; syntax checks and diff check passed.
+- Gym App activation-code-only changes: successful guarded patch; targeted formatting/analyzer passed.
+- Super Admin popup changes: successful guarded patch; targeted formatting/analyzer passed.
+- Full-project Flutter analysis for both Flutter repositories passed after code-only activation and popup changes.
+- Final Gym App device-validation files were separately analyzed afterward and passed with `No issues found`.
+- Do not state that all three repositories are committed or pushed. At this checkpoint the changes remain local/uncommitted.
+
+### 31.8 Release preparation — current explicit Git staging plan
+
+All repositories are independent. Verify `git status`, `git branch --show-current`, `git remote -v` and `git fetch origin` for each before staging. Do not use `git add .`, destructive resets, broad restores or `git clean`. Never stage `.env`, secrets, build directories, local backup files or unrelated changes.
+
+API staging paths (only these four):
+
+```text
+src/controllers/deviceController.js
+src/controllers/deviceManagementController.js
+src/routes/deviceRoutes.js
+src/middleware/deviceAuthMiddleware.js
+```
+
+Gym App staging paths (only these paths):
+
+```text
+lib/main.dart
+lib/features/splash/presentation/splash_screen.dart
+lib/core/
+lib/features/auth/
+lib/features/device_activation/
+```
+
+Super Admin staging paths (only these two):
+
+```text
+lib/features/devices/device_management_screen.dart
+GYM_MANAGEMENT_PROJECT_MASTER.md
+```
+
+Suggested separate commit messages:
+
+- API: `Add 15-minute activation and device validation`
+- Gym App: `Require server validation for device startup`
+- Super Admin: `Show organization and device in activation code dialog`
+
+Push each repository separately to `origin main` only after confirming the current branch is `main`, the working tree contains only expected changes, and the local branch is not unexpectedly behind/diverged. The master file is part of the Super Admin repository commit.
+
+### 31.9 Outstanding work after this checkpoint
+
+1. Copy this updated master document into the Super Admin repository root and commit/push it with the Super Admin popup change.
+2. Commit and push the four named API files.
+3. Commit and push the listed Gym App files/directories.
+4. Re-run full-project `flutter analyze` for Gym App and Super Admin after the latest changes; API `node --check` and `git diff --check` as part of pre-push.
+5. Hot restart/rebuild the Gym App, then test: valid active device -> login; revoked device -> Activation; deleted device -> Activation; pending device -> Activation; invalid token -> Activation; license expired/inactive -> blocked error/retry; server unavailable -> blocked retry while retaining activation.
+6. Confirm the 15-minute expiry with a real newly generated code; verify an expired code is rejected and a single-use code cannot be reused.
+7. Regenerate any pending codes that were created before the 15-minute policy change; old DB expiry timestamps remain until those codes are replaced or expire.
+8. Add rate limiting/attempt throttling for public activation attempts and assess whether the 10-hex-character code format should be strengthened.
+9. Add device-originated `DEVICE_ACTIVATED` operational audit history inside the activation transaction. Do not record activation code or plaintext device token.
+10. Apply `authenticateDevice` to all protected Gym Staff routes when those API routes are created; the current new validation route is protected, but future operational endpoints are not yet present.
+11. Consider revalidation on foreground resume if immediate revocation while the Gym App process remains alive is required. That lifecycle observer change has not been implemented.
+12. Complete the separate one-active-device/two-pending-device quota test; it is not yet proven by the current activation flow.
+13. Continue Gym Staff authentication/session handling, tenant-side user/role/permission management, audit hardening and only then membership/payment/program/progress modules.
+
+### 31.10 Exact continuation point
+
+The activation/onboarding flow has now been changed to code-only entry with a 15-minute code lifetime; the API can validate an activated device token against device, organization and latest-license state; and the Gym App validates the saved token at startup before displaying login. Static validation passed for the changed files. The next immediate task is to put the updated master file in the Super Admin repo, perform careful full-project/pre-push validation, and push all three repositories independently. After push, hot restart/rebuild the emulator app and repeat the revoked-device and expiry tests before considering device security complete.
 
 ---
 
