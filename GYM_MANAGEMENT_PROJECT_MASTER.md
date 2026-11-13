@@ -1,7 +1,7 @@
 # GYM MANAGEMENT PROJECT MASTER
 
 **Technical handover and continuation reference**
-**Last updated:** 12 November 2026 (15-minute device activation, activation without Organization ID, server-backed startup device validation)
+**Last updated:** 13 November 2026 (Gym Staff branch switching, organization-wide device/member branch rules, Membership Plan schema and permissions)
 **Project owner / development context:** Innovex Fitness Center / Innovex Web Solutions
 **Primary development environment:** Office Windows laptop, PowerShell, Flutter, Node.js and MySQL 8. Current office-laptop project paths are recorded in Section 31. Do not assume the home laptop has these latest unpushed changes.
 
@@ -2338,3 +2338,264 @@ The activation/onboarding flow has now been changed to code-only entry with a 15
 ---
 
 **End of updated master handover document.**
+
+
+---
+
+## 32. Current Office-Laptop Checkpoint — Branch Switching and Membership Plans (13 November 2026)
+
+This is the latest authoritative checkpoint as of 13 November 2026. It supersedes earlier statements in Sections 21–31 wherever current workstation state, Gym Staff authentication, branch behavior, membership-plan development, or next tasks differ. Older sections remain historical records.
+
+### 32.1 Current workstation, projects and repositories
+
+The active workstation is the **office Windows laptop**. Use these exact paths in PowerShell commands:
+
+```text
+C:\Users\Pradeep\Documents\INNOVEX WEB\Flutter Projects\gym_management_api
+C:\Users\Pradeep\Documents\INNOVEX WEB\Flutter Projects\gym_management_super_admin
+C:\Users\Pradeep\Documents\INNOVEX WEB\Flutter Projects\gym_management_app
+```
+
+The three Git repositories are independent and must be committed/pushed separately:
+
+| Project | GitHub remote |
+|---|---|
+| API | `https://github.com/arafath65/gym-management-api.git` |
+| Super Admin | `https://github.com/arafath65/gym-management-super-admin.git` |
+| Gym App | `https://github.com/arafath65/gym-management-apps.git` |
+
+Do not assume the local Windows project folders are accessible from ChatGPT. Before each release, inspect actual local `git status`, branch, remote and fetched `origin/main`. Never use `git add .`; stage only reviewed project files. Do not stage `.env`, credentials, device activation codes, plaintext device tokens, build output, `node_modules`, `.dart_tool`, or backup files.
+
+### 32.2 Final branch and device behavior decisions
+
+These are product-wide rules and must be applied consistently to all future APIs, database tables, Flutter screens, reports and dashboards.
+
+**Devices are organization-bound, not branch-bound.**
+
+- A device is registered to one `organization_id`.
+- `devices.registered_branch_id` is retained as the original/default registration branch for reference only.
+- A device may be used at any branch belonging to its own organization. `registered_branch_id` must never be used to reject a request solely because the device is being used at a different branch.
+- Device authentication must continue to validate the device token, device status, organization ownership/status, and applicable license validity.
+- A device registered to Organization A must never be accepted for Organization B.
+- Using the device at another branch must not rewrite `registered_branch_id`.
+
+**Members are organization-wide for attendance.**
+
+- A member's registration/home branch is reference information, not an attendance restriction.
+- A member may attend any branch belonging to the same organization.
+- Attendance must record the actual branch where check-in occurred, separately from the member's home branch.
+- Recommended attendance history fields include `branch_id` and `branch_name_snapshot`, so old attendance continues to display the branch name that applied at check-in if the branch is renamed later.
+- Do not reject member attendance because the actual attendance branch differs from the member's registered/home branch.
+- Member/attendance tables and APIs have not yet been implemented; these are mandatory design rules for their future implementation.
+
+**Gym Staff active-branch access remains separately secured.**
+
+- `devices.registered_branch_id` and Gym Staff's active working `branch_id` are distinct values.
+- The active branch comes from the Gym Staff session and must be checked against the user's active `user_branch_access` records.
+- Gym Admin/authorized staff can switch to another branch to which they have access, subject to `branches.switch` permission.
+- A normal staff user remains constrained by their assigned branches and permissions.
+- Every operational API must use the authenticated `req.gymStaff.branchId` as the active branch context when a module is branch-scoped; never trust an arbitrary client-supplied organization or branch identifier.
+- Switching active branch does not modify the device's registered branch.
+
+### 32.3 Branch-switch permission migration — completed
+
+The permission migration `scripts/migrateGymAdminBranchSwitchPermission.js` was executed successfully on 13 November.
+
+- Added `branches.switch` to `permissions` with `gym_admin_default = 1`.
+- The permission received ID `22` in the current database.
+- All three existing organization-scoped system Gym Admin roles were synchronized successfully.
+- Organizations 1, 2 and 3 each have 14 default Gym Admin permissions and `branches.switch` assigned.
+- Custom staff roles were not modified.
+
+The existing `src/services/gymAdminPermissionService.js` uses `gym_admin_default` metadata to synchronize only system Gym Admin roles. Future Gym Admin-default permission migrations should use this service rather than maintaining hard-coded permission lists.
+
+### 32.4 Gym Staff authentication and branch-switch API — implemented locally, not end-to-end tested
+
+The Gym Staff API has been added to the API project:
+
+- `src/controllers/gymAuthController.js`
+- `src/middleware/gymStaffAuthMiddleware.js`
+- `src/routes/gymAuthRoutes.js`
+- `src/services/gymAdminPermissionService.js`
+- `scripts/syncGymAdminPermissions.js`
+
+`src/server.js` mounts `/api/gym-auth`.
+
+The route `POST /api/gym-auth/switch-branch` uses device authentication, Gym Staff JWT authentication and `requireGymPermission("branches.switch")` before calling the branch-switch controller.
+
+The branch-switch implementation issues a new Gym Staff session token with the selected active branch, checks the user's branch access through the session creation flow, does not change device registration, and writes a `GYM_STAFF_BRANCH_SWITCH` audit action. The `/api/gym-auth/me` response includes accessible branch information for restoring the selector.
+
+The branch-switch code was validated using:
+
+- `node --check` for `gymAuthController.js`, `gymStaffAuthMiddleware.js` and `gymAuthRoutes.js` — passed.
+- Runtime `require()` probe for the controller, middleware and router — passed.
+- `git diff --check` — passed.
+
+**Qualification:** a real HTTP integration test of branch switching, token replacement and audit-log persistence has not yet been reported. The Flutter branch selector and Flutter call to `/switch-branch` are also not yet implemented. Do not describe branch switching as fully user-tested until these are completed.
+
+### 32.5 Membership Plan module — database foundation completed
+
+The user chose this implementation order:
+
+1. Membership Plan Management.
+2. Fitness Program Management.
+3. Trainer Management.
+4. Member Management, using the earlier master records during member registration.
+5. Attendance Management.
+6. Payments and reports.
+
+The `membership_plans` table was created successfully on 13 November by `scripts/migrateMembershipPlans.js`.
+
+Current schema fields:
+
+| Column | Current definition / purpose |
+|---|---|
+| `id` | Auto-increment primary key |
+| `organization_id` | Owning gym organization |
+| `plan_code` | Unique within the organization; API should generate it |
+| `name` | Plan display name |
+| `description` | Optional description |
+| `package_type` | `individual` or `couple` |
+| `tier` | Configurable tier label such as Gold, Silver or Platinum |
+| `duration_value` | Positive duration count |
+| `duration_unit` | `day`, `week`, `month` or `year` |
+| `price` | Total package price (`DECIMAL(12,2)`) |
+| `currency_code` | Three-character currency code; defaults to `LKR` |
+| `included_members` | Number of people covered by the package |
+| `paying_members` | Number of people charged by the package |
+| `status` | `active` or `inactive` |
+| `created_by_user_id` | Authenticated Gym Staff creator |
+| `updated_by_user_id` | Last authenticated Gym Staff updater |
+| `created_at`, `updated_at` | Creation/update timestamps |
+
+The schema enforces:
+
+- Organization-scoped unique plan code and ID keys.
+- Organization foreign key.
+- Creator/updater foreign keys scoped to the same organization.
+- Non-negative price and positive duration.
+- `included_members >= paying_members >= 1`.
+- Individual packages have exactly one included and one paying member.
+- Couple packages have exactly two included members and one paying member.
+
+**Benefits were explicitly removed.** The user does not want a benefits field in membership plans. The `benefits` column was removed successfully after the migration, and `scripts/migrateMembershipPlans.js` was updated so fresh installations do not create it. The removal script is `scripts/migrateRemoveMembershipPlanBenefits.js`. Verification showed no `benefits` column in the table. There were no membership-plan rows when the safe removal migration ran; the script would stop rather than drop the column if plans already existed.
+
+Examples:
+
+- Individual Gold Monthly: one included member, one paying member.
+- Couple Gold Monthly: two included members, one paying member; the price is the total couple-package price, not a per-person amount.
+
+Plans are organization-wide in the initial design. Do not add a branch restriction to plan availability unless a later explicit product decision introduces optional branch availability.
+
+### 32.6 Membership Plan permission catalogue — completed
+
+The migration added four permissions with `gym_admin_default = 1`:
+
+| Permission | Current database ID |
+|---|---:|
+| `membership_plans.view` | 23 |
+| `membership_plans.create` | 24 |
+| `membership_plans.update` | 25 |
+| `membership_plans.deactivate` | 26 |
+
+The migration synchronized the existing system Gym Admin roles for organizations 1, 2 and 3. Each role received all four permissions. Custom staff roles were not modified. The permission sync mechanism will also grant these defaults to future organizations when their Gym Admin role is provisioned.
+
+### 32.7 Services are a separate future module
+
+The user explicitly decided that membership plans should not contain service/benefit definitions. Facilities such as swimming pool, sauna and similar services will be managed through a separate Services module.
+
+Future integration may associate services with a membership plan through a separate relationship table (for example, a plan-to-service entitlement table). A service may also be sold separately with its own price and validity. Do not add a `benefits` JSON/text field back to `membership_plans` and do not hardcode swimming pool/sauna properties into membership plan records.
+
+The Services module itself has not been implemented or fully specified yet.
+
+### 32.8 Membership Plan API and Flutter UI — not yet implemented
+
+The current milestone is database schema and permission foundation only. No Membership Plan CRUD API, repository/service layer, Flutter model, plan list, create/edit form or dashboard navigation screen has been confirmed as implemented.
+
+Next Membership Plan implementation should include:
+
+- `GET` list with pagination/search/status filtering, organization scope from authenticated Gym Staff context, and view permission.
+- `GET` one plan scoped by organization and plan ID.
+- `POST` create with `membership_plans.create`, validated input, generated organization-unique plan code, creator ID from `req.gymStaff.userId`, and a transaction-backed audit record.
+- `PUT` or `PATCH` update with `membership_plans.update`, immutable organization/creator data, and updater ID from authenticated context.
+- Deactivate action with `membership_plans.deactivate`; do not hard-delete plan records because future member subscriptions may reference them.
+- Consistent error handling, validation and organization scoping. Never accept `organization_id` or creator IDs as trusted client input.
+- Flutter API service/model and responsive Membership Plans list, create/edit form, view details and deactivate confirmation.
+- Add navigation visibility/actions based on the four permission keys.
+- Verify all mutations through API/database tests and audit logs before considering the module complete.
+
+The plan-code column is mandatory and unique per organization, but the automatic code-generation logic belongs in the API and has not yet been implemented. Example display code only: `GOLD-MON-001`; do not rely on a hard-coded prefix convention until the generator is designed.
+
+### 32.9 Current project change inventory — recheck before Git staging
+
+The last displayed API Git status after the branch-switch permission migration included:
+
+```text
+ M src/controllers/organizationController.js
+ M src/middleware/deviceAuthMiddleware.js
+ M src/routes/organizationRoutes.js
+ M src/server.js
+?? scripts/migrateGymAdminBranchSwitchPermission.js
+?? scripts/syncGymAdminPermissions.js
+?? src/controllers/gymAuthController.js
+?? src/middleware/gymStaffAuthMiddleware.js
+?? src/routes/gymAuthRoutes.js
+?? src/services/gymAdminPermissionService.js
+```
+
+Since then the Membership Plan migration scripts were created/updated:
+
+```text
+scripts/migrateMembershipPlans.js
+scripts/migrateRemoveMembershipPlanBenefits.js
+```
+
+The latest complete API Git status after those migration changes has **not** been captured. Recheck before staging.
+
+The last reported Gym App Git status was:
+
+```text
+ M lib/features/auth/presentation/app_entry_screen.dart
+ M lib/features/auth/presentation/login_screen.dart
+ M pubspec.yaml
+?? assets/images/gym_hero_athlete.png
+?? lib/core/services/gym_auth_service.dart
+?? lib/features/auth/presentation/gym_authenticated_screen.dart
+```
+
+Recheck the current Gym App status and run full `flutter analyze` before staging. The Gym App includes device activation/login/session and a dark green/black dashboard foundation. A Flutter active-branch selector, branch-switch API integration, and Membership Plan UI have not yet been implemented.
+
+No current Git status was captured for the Super Admin repository during this 13 November work. Do not assume it is clean or dirty; inspect it. The Super Admin app was not intentionally changed as part of the Gym Staff branch-switch or Membership Plan database work. It may still contain the earlier activation dialog change described in Section 31.
+
+### 32.10 GitHub release preparation — three separate projects
+
+The user requested a release/push of the updated project state and this master document to all three GitHub repositories. No `git commit` or `git push` was executed during the 13 November branch-switch/Membership Plan work in this ChatGPT session.
+
+Before pushing:
+
+1. Confirm `main` is the current branch in all three repositories.
+2. Confirm the exact expected `origin` URL for each repository.
+3. Fetch `origin` and stop if local `main` is behind/diverged; do not force push.
+4. Run API JavaScript syntax checks and `git diff --check`.
+5. Run full `flutter analyze` in both Flutter projects.
+6. Stage only reviewed changed source/migration/documentation files. Never `git add .`.
+7. Copy this document into the Super Admin repository root as `GYM_MANAGEMENT_PROJECT_MASTER.md`; back up any existing copy before replacing it.
+8. Commit/push each repository independently. Report commit hashes and push results separately.
+
+The exact current staged file list must be derived from fresh Git status. Earlier change inventory is a guide, not proof of current local state.
+
+### 32.11 Exact continuation point
+
+The branch-switch permission migration and Membership Plan table/permissions are applied and verified in the office-laptop database. The API branch-switch code passed syntax/module-load/diff checks, but has not yet received an end-to-end HTTP test. The member/device cross-branch rules are settled product requirements. Benefits were removed from membership plans; swimming pool, sauna and similar facilities will be a separate Services module later.
+
+**Immediate next tasks:**
+
+1. Recheck and safely commit/push the API, Gym App and Super Admin repositories; include this updated master document in the Super Admin repository root.
+2. After release, test branch switching end-to-end (permissions, branch access, new JWT, `/me`, audit row) and build the Flutter active-branch selector.
+3. Implement Membership Plan CRUD API with validation, generated plan codes, organization isolation and audit logging.
+4. Build Membership Plan Flutter screens and test all four permissions.
+5. Continue with Fitness Program Management, Trainer Management, Member Management, Attendance, Services integration, Payments and reports in that order.
+
+---
+
+**End of current authoritative master handover document (13 November 2026).**
