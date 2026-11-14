@@ -1,7 +1,7 @@
 # GYM MANAGEMENT PROJECT MASTER
 
 **Technical handover and continuation reference**
-**Last updated:** 13 November 2026 (Gym Staff branch switching, organization-wide device/member branch rules, Membership Plan schema and permissions)
+**Last updated:** 14 November 2026 (Gym Staff role/permission API foundation, permission-scope migration, Gym App operational modules, device transfers and synchronized GitHub release)
 **Project owner / development context:** Innovex Fitness Center / Innovex Web Solutions
 **Primary development environment:** Office Windows laptop, PowerShell, Flutter, Node.js and MySQL 8. Current office-laptop project paths are recorded in Section 31. Do not assume the home laptop has these latest unpushed changes.
 
@@ -2598,4 +2598,310 @@ The branch-switch permission migration and Membership Plan table/permissions are
 
 ---
 
-**End of current authoritative master handover document (13 November 2026).**
+**End of the 13 November 2026 checkpoint. The authoritative 14 November 2026 continuation update follows.**
+---
+
+## 33. Current Authoritative Checkpoint — Role API, Operational Modules and GitHub Release (14 November 2026)
+
+This section is the newest verified continuation checkpoint. It supersedes earlier statements wherever they conflict with the 14 November source inventory, database audit, validation output or GitHub commit state. Sections 1–32 are retained as historical design and implementation records; do not delete them merely because later work changes the status of a feature.
+
+### 33.1 Office workstation and repository state
+
+The active workstation for the work summarized here is the office Windows laptop. The project root and exact repository paths are:
+
+```text
+C:\Users\Pradeep\Documents\INNOVEX WEB\Flutter Projects\
+    gym_management_api\
+    gym_management_app\
+    gym_management_super_admin\
+```
+
+All three repositories are on branch `main`. Each repository was fetched from `origin/main` and checked after the push attempt. The final verification showed:
+
+- `git rev-list --left-right --count origin/main...main` returned `0 0` for every repository.
+- `git status --short --branch` showed `## main...origin/main` with no modified or untracked files in each repository.
+- Local `HEAD`, `origin/main` and `origin/HEAD` pointed at the same latest commit in each repository.
+
+The first push script printed `FAILED` for the API and Gym App because its PowerShell/native-command output handling did not capture the push result reliably. **Do not interpret that first summary as the final GitHub state.** A subsequent `git fetch origin main`, commit comparison and clean-status verification proved that both commits were present on GitHub. No force push, reset, rebase or merge was needed.
+
+### 33.2 Verified GitHub release checkpoint
+
+These are the exact repositories and latest commits verified on 14 November 2026:
+
+| Project | Repository | Latest verified commit | Commit message | Verification |
+|---|---|---|---|---|
+| Gym Management API | `https://github.com/arafath65/gym-management-api` | `b4aaaf9` | `Update gym API and role permission management` | Local and `origin/main` synchronized; clean tree |
+| Gym Management App | `https://github.com/arafath65/gym-management-apps` | `909b777` | `Update gym app device management and permissions foundation` | Local and `origin/main` synchronized; clean tree |
+| Gym Management Super Admin | `https://github.com/arafath65/gym-management-super-admin` | `5039251` | `Update Gym Management project master handover` | Local and `origin/main` synchronized; clean tree |
+
+The Super Admin repository had no pending source changes during this release check. Its latest commit already contained the then-current master handover file. The updated 14 November version of this document is a subsequent documentation change and must be copied into that repository and committed separately after reviewing the diff.
+
+The old repository named `Gym-Management-App` is not the current Flutter Gym App repository. The active Flutter operational application is `gym-management-apps` (folder `gym_management_app`). Do not confuse the older Android project/repository with the Flutter repository listed above.
+
+### 33.3 API source modules now present in the 14 November release
+
+The API repository's 14 November commit included the following additional/current source modules:
+
+```text
+src/controllers/
+    fitnessProgramController.js
+    gymAuditLogController.js
+    gymBranchController.js
+    gymDeviceController.js
+    gymRoleController.js
+    membershipPlanController.js
+
+src/routes/
+    fitnessProgramRoutes.js
+    gymAuditLogRoutes.js
+    gymBranchRoutes.js
+    gymDeviceRoutes.js
+    gymRoleRoutes.js
+    membershipPlanRoutes.js
+
+src/services/
+    gymAdminPermissionService.js
+
+scripts/
+    migrateFitnessPrograms.js
+    migrateGymDeviceTransfers.js
+    migrateGymPermissionScope.js
+    migrateMembershipPlans.js
+    migrateOngoingMembershipPlans.js
+```
+
+The release also updated existing `gymAuthController.js`, `deviceAuthMiddleware.js`, `server.js`, `gymAdminPermissionService.js` and `migrateMembershipPlans.js`. The API commit summary reported 26 changed files, approximately 7,106 insertions and 61 deletions. This is the Git change summary, not a count of independently completed or end-to-end tested features.
+
+The route files and controllers exist in the committed source. Before extending a controller or writing a Flutter service against it, inspect the current route and controller code to confirm exact paths, HTTP methods, request fields, response shapes, middleware order and permission keys. Do not infer an API contract from a screen label or filename.
+
+### 33.4 Gym App source modules now present in the 14 November release
+
+The Gym App repository's 14 November commit included these services/screens and updates:
+
+```text
+lib/core/services/
+    gym_api_client.dart
+    gym_auth_service.dart
+
+lib/features/audit_logs/
+    data/audit_log_service.dart
+    presentation/audit_logs_screen.dart
+
+lib/features/branches/
+    data/branch_service.dart
+    presentation/branch_management_screen.dart
+
+lib/features/devices/
+    data/device_service.dart
+    presentation/device_management_screen.dart
+
+lib/features/fitness_programs/
+    data/fitness_program_service.dart
+    presentation/fitness_programs_screen.dart
+
+lib/features/membership_plans/
+    data/membership_plan_service.dart
+    presentation/membership_plans_screen.dart
+
+lib/features/auth/presentation/
+    gym_authenticated_screen.dart
+```
+
+The authenticated-screen and Gym Auth service were updated. These files were committed in `909b777`. The commit summary reported 15 changed files, approximately 9,101 insertions and 13 deletions. The Git summary included two timestamped backup copies of the Membership Plans screen; see the repository hygiene note in Section 33.10.
+
+**Implementation status distinction:** source modules and screens are present in the repository. Their presence alone does not prove every action, filter, permission combination, transaction, or error path has passed runtime testing. Record module-level tests separately as they are completed.
+
+### 33.5 Device management and device-to-branch transfer — implementation and user testing
+
+The Gym App now contains device-management service and screen code; the API contains the corresponding controller and route code. The device-transfer migration script is included in the API repository.
+
+The database migration was run successfully before the GitHub release:
+
+- `device_branch_transfer_history` was created.
+- The Gym Staff permission catalogue received `devices.view` and `devices.transfer` for the existing system Gym Admin roles.
+- The user manually tested device assignment/transfer and reported that it worked successfully.
+- The Flutter device-management screen's earlier analyzer issue was corrected. The `separatorBuilder` callback was changed from duplicate underscore identifiers to `(_, _)`, and the user reported `flutter analyze` as `No issues found` at that checkpoint.
+- The earlier top-bar `Flexible(Text(...))` layout issue was corrected by the user. The active device's registered/default branch display is distinct from the Gym Staff active working branch selector.
+
+Keep the product rules in Section 32.2 unchanged:
+
+- A device belongs to one organization, not exclusively to one branch.
+- `registered_branch_id` is retained as the device's registration/default branch reference.
+- Device transfer must not change the device token or the Gym Staff JWT's active branch.
+- Device authentication validates token, device status, organization ownership/status and license validity.
+- A Gym Admin can manage device assignments within their organization, subject to permission checks.
+- Platform/Super Admin performs initial registration/activation provisioning; tenant-level device transfer belongs to the Gym Owner/Gym Admin workflow.
+- Branch authorization for staff remains enforced independently through `user_branch_access` and the selected active branch.
+
+Do not run `scripts/migrateGymDeviceTransfers.js` again unless the migration itself is deliberately changed and made safe/idempotent. The reported migration has already been applied to the office database.
+
+### 33.6 Role and permission API foundation — migration applied; Flutter management UI pending
+
+The following API files were created/updated and included in the 14 November API commit:
+
+- `src/controllers/gymRoleController.js`
+- `src/routes/gymRoleRoutes.js`
+- `src/services/gymAdminPermissionService.js`
+- `scripts/migrateGymPermissionScope.js`
+- `src/server.js`
+
+The migration script was run successfully. Its reported result was:
+
+```text
+Adding permissions.permission_scope...
+Gym permission-scope migration completed.
+Permission counts:
+  gym      26
+  platform  6
+Existing Gym Admin roles synchronized: 3
+
+org 1 / role 1: 25 permissions; added roles.delete; removed none
+org 2 / role 2: 25 permissions; added roles.delete; removed none
+org 3 / role 3: 25 permissions; added roles.delete; removed none
+```
+
+The migration added the `permission_scope` column to the `permissions` catalogue and classified permissions into `gym` and `platform` scopes. Six permissions are platform-scoped and must not be exposed or assignable in Gym Owner/Gym Staff role management. The Gym scope has 26 catalogue entries. Each of the three existing system Gym Admin roles was synchronized to 25 assigned permissions and received `roles.delete`.
+
+The system Gym Admin synchronization service is the source of truth for default Gym Admin permission grants. It synchronizes permissions marked for Gym Admin defaults. **Custom roles must not be silently changed when new permissions are added.** Newly introduced permissions should be available in the relevant Gym permission catalogue, but a custom role receives one only when an authorized Gym Admin explicitly grants it.
+
+The database audit performed after migration found:
+
+- `permissions.permission_scope` exists.
+- 26 `gym` permission rows and 6 `platform` permission rows.
+- 13 role records in total.
+- 8 role assignments in `user_roles`.
+- Three existing system Gym Admin roles, each with 25 assigned permissions.
+- No missing required core tables among `permissions`, `roles`, `role_permissions`, `users`, `user_roles`, `user_branch_access`, `branches` and `organizations`.
+
+The API source syntax checks passed for:
+
+```powershell
+node --check src/controllers/gymRoleController.js
+node --check src/routes/gymRoleRoutes.js
+node --check scripts/migrateGymPermissionScope.js
+node --check src/services/gymAdminPermissionService.js
+node --check src/server.js
+```
+
+Earlier source checks also passed for the device and Gym Auth files. The user reported the API health endpoint returned `success = True`, `api = connected`, `database = connected` after this work.
+
+**Not yet confirmed complete:** no Flutter Role & Permission management service/screen has been implemented in the current release; the new Role API has not yet been end-to-end tested with the Flutter UI. Before implementing that UI, inspect `gymRoleRoutes.js` and `gymRoleController.js` and capture their exact API contract. The audit report used for the earlier source inspection predates these newly committed files, so it is not a substitute for reading the current source.
+
+### 33.7 Authentication and permission enforcement rules for continued work
+
+The current Gym Staff authorization design requires the API to reload the user's active state, assigned roles and effective permissions from MySQL on every authenticated request rather than trusting permission claims embedded in a potentially stale JWT.
+
+- `requireGymPermission(permissionKey)` checks `req.gymStaff.permissions` and rejects an unauthorized operation with HTTP 403.
+- Branch access remains a separate authorization dimension; a user must be authorized for the active branch through `user_branch_access`.
+- Gym permissions and Platform Admin permissions are separate catalogues/scopes and must never be mixed.
+- Do not accept client-supplied `organization_id`, creator IDs or arbitrary branch context as trusted identity. Derive organization/user context from the verified session and validate branch access on the server.
+- Keep system Gym Admin protected from unsafe rename/edit/delete operations. Custom-role deletion must be blocked or require safe reassignment when users are still assigned.
+- Meaningful role/permission mutations must write audit records transactionally with the database change.
+
+The Role API source exists and passed syntax checks, but complete route coverage, all authorization branches, custom-role lifecycle behavior and audit persistence still require endpoint-level tests before calling the RBAC module production-verified.
+
+### 33.8 Database audit snapshot — 14 November 2026
+
+The latest database audit reported:
+
+- Database: `gym_management_db`.
+- MySQL server version observed by the audit: `8.0.46`.
+- Organization records observed: Innovex Fitness Center, ABC Fitness Center and Power Worlds.
+- Core organization/branch/user/role/permission tables listed in Section 33.6 were present.
+- Additional feature tables observed included `audit_logs`, `devices`, `device_branch_transfer_history`, `licenses`, `fitness_programs`, `membership_plans` and Platform Admin tables.
+- `user_branch_access` showed organization 1 with branch 1, organization 2 with branch 2, and organization 3 with branches 3 and 4.
+
+The role/permission audit confirmed the following current table structure facts:
+
+- `permissions`: `id`, unique `permission_key`, `module_name`, `description`, `gym_admin_default`, and the newly added `permission_scope`.
+- `roles`: `id`, `organization_id`, `name`, `description`, `is_system_role`, timestamps and organization-scoped uniqueness/foreign-key relationships.
+- `role_permissions`: composite role/permission association with foreign keys.
+- `users`: organization-scoped staff identity, full name, email, phone, password hash, active/inactive/locked status and login/timestamp fields.
+- `user_roles`: organization-scoped user-to-role association.
+- `user_branch_access`: organization-scoped user-to-branch access.
+- `branches`: organization, name, branch code, phone, address and active/inactive status.
+
+This is an audit snapshot, not a promise that the live database has not changed since 14 November. Before any destructive or data-changing migration, take a fresh backup, inspect `SHOW CREATE TABLE`, check row counts/foreign keys and confirm the script's idempotency. Do not repeat migrations already reported as successful merely to reproduce their output.
+
+### 33.9 API and Flutter validation evidence
+
+Validation reported during the 14 November work:
+
+- API JavaScript syntax checks passed for the newly created role controller, role routes, permission-scope migration, Gym Admin permission service and API server.
+- API health request to `http://localhost:5000/api/health` returned API and database as connected.
+- Device and Gym Staff Auth source syntax checks had previously passed.
+- The device transfer workflow was manually exercised by the user and reported working.
+- Flutter analyzer reported no issues after the earlier device-screen separator callback correction.
+
+The following should not be represented as completed tests without fresh evidence:
+
+- Full repo-wide `flutter analyze` after every newly added module in the 14 November commit.
+- Full API automated/integration test suite for all newly committed controllers.
+- Role CRUD and permission-assignment API integration tests.
+- Staff-management workflow (staff creation, editing, activation/deactivation, role assignment and branch access).
+- Flutter Role & Permission screen behavior.
+- A complete end-to-end test proving audit rows for each role/device/branch/program/membership mutation.
+- End-to-end verification of the branch-switch token replacement and audit record together with the Flutter selector.
+
+### 33.10 Repository hygiene note — backup files included in the release
+
+The Git change summary for the 14 November API commit showed a `Temp/` backup directory containing at least a JSON backup of membership plan data created before an ongoing-membership migration. The Gym App commit included two timestamped backup Dart files:
+
+```text
+membership_plans_screen.dart.backup_20261114_101647
+membership_plans_screen.dart.backup_20261114_101921
+```
+
+These files were part of the commits already synchronized to GitHub. Do not rewrite history or force-push to remove them. Before the next normal release:
+
+1. Inspect the exact contents of the API `Temp/` backup and confirm whether it contains live customer/member data or any sensitive values. Do not paste sensitive records into chat.
+2. Decide whether the backup belongs in source control. If it should not be tracked, remove it in a normal follow-up commit after preserving an appropriate private backup.
+3. Remove the two Flutter `.backup_*.dart` files from the repository in a normal commit if they are no longer needed as tracked source artifacts.
+4. Add narrowly scoped ignore rules for future local backups (for example `Temp/` and `*.backup_*.dart`) only after checking existing ignore rules and confirming the patterns will not hide legitimate migration/source files.
+5. Continue to keep `.env`, credential files, private keys, device tokens, activation codes and other secrets out of Git.
+
+The earlier push preflight reported no suspicious secret filenames in staged/unstaged/untracked changes. That filename check does not prove that a JSON backup has no sensitive record content; inspect the file before deciding to keep it public.
+
+### 33.11 Current product and module status summary
+
+| Area | Current 14 November status | Next verification/action |
+|---|---|---|
+| Platform Super Admin | Existing app and API remain synchronized at `5039251`; no new source edits in this release | Continue only if a new Platform Admin feature is planned; preserve separate platform RBAC |
+| Gym Staff Auth | API/session code exists and was updated; health and syntax checks passed | Test login, `/me`, expired/inactive user and branch-context behavior end to end |
+| Branch management | Gym API controller/routes and Flutter service/screen are in the committed source | Confirm route permissions, assigned-branch enforcement, mutations and audit rows |
+| Device management/transfer | API and Flutter modules committed; transfer migration applied; manual transfer reported working | Verify authorization, transfer history and audit behavior; do not rerun migration |
+| Audit logs | API controller/routes and Flutter service/screen committed | Verify filters/pagination and tenant/branch visibility; ensure mutation coverage and authorization |
+| Role & Permission API | Controller/routes committed; permission scopes migrated; Gym Admin defaults synchronized | Inspect exact API contract, test routes, then build Flutter management UI |
+| Staff management | Not established as complete by the 14 November source inventory | Implement after the role/permission workflow; include branch access, status and audits |
+| Fitness Programs | API controller/routes, migration script, Flutter service and screen are present; table observed in DB audit | Verify CRUD/enrollment rules and API/UI end-to-end; avoid claiming all program workflows tested |
+| Membership Plans | API controller/routes, migrations, Flutter service and screen are present; table observed in DB audit | Verify plan validation, ongoing-member interactions, permissions and audit writes |
+| Trainer Management | Not established as complete in this release | Implement after role/staff foundation and confirm trainer permissions/data model |
+| Members and fitness progress | Requirements remain in earlier sections; complete module not verified in this release | Build after the staff/role foundation; maintain organization-wide attendance rule |
+| Attendance | No completed attendance module verified | Record actual attendance branch separately from member home branch |
+| Services | Separate future module; not part of Membership Plan benefits | Define service catalogue, price/validity and plan entitlement relationship separately |
+| Payments/reports | Not established as complete | Build after membership/subscription/payment rules are approved |
+
+### 33.12 Next development sequence
+
+The immediate next steps for the next development session are:
+
+1. **Inspect the current Role API contract.** Read the committed `gymRoleRoutes.js`, `gymRoleController.js`, relevant middleware and `server.js` mounting. Record exact paths, methods, payloads, response shapes, scopes and permission guards before writing Flutter code.
+2. **Build Flutter Role & Permission Management.** Load permissions dynamically from the Gym permission scope; group by the server-provided module; support custom role creation/edit/delete and permission assignment; never display Platform-scoped permissions to Gym Staff; protect the system Gym Admin role.
+3. **Test role security.** Verify `roles.view/create/update/delete/assign`, the system-role restrictions, custom-role behavior, assigned-user deletion handling, and transactional audit logging using both permitted and denied users.
+4. **Build Staff Management.** Include staff account lifecycle, role assignment, branch access and audit logs. Keep staff organization/branch restrictions enforced by the API.
+5. **Run complete validation.** Run `node --check`/API tests for changed files, `git diff --check`, full `flutter analyze` in the Gym App, and real HTTP/database integration tests for every changed module. Record which checks passed instead of describing untested code as complete.
+6. **Clean tracked backup artifacts in a normal commit.** Inspect API `Temp/` data first, then remove only confirmed unnecessary backup files and add narrow ignore rules as appropriate.
+7. Continue refinement/testing of Fitness Programs and Membership Plans, then Trainer Management, Member Management, Attendance, Services, Payments and reports according to the product dependencies.
+
+### 33.13 Continuation instructions for a new ChatGPT conversation
+
+- Treat this Section 33 as the latest checkpoint as of 14 November 2026; Sections 1–32 are retained for the decisions and historical details they contain.
+- Use the three correct repository URLs and commit hashes from Section 33.2. The older `Gym-Management-App` repository is not the Flutter Gym App repository being developed now.
+- The permission-scope migration and device-transfer migration have already been run on the office database. Do not rerun them blindly.
+- Do not guess the Role API route paths or request/response contract. Inspect the actual committed source before building the Flutter Role screen.
+- Never assume that a module is fully tested merely because its files exist or its commit was pushed. Preserve the distinction between source present, migration applied, syntax-checked, analyzer-checked and end-to-end tested.
+- Do not force-push. The three repositories were confirmed synchronized and clean at the commits shown in Section 33.2. The updated copy of this master file is the next intended documentation commit.
+
+---
+
+**End of current authoritative master handover document (14 November 2026).**
