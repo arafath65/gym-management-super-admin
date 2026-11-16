@@ -243,6 +243,7 @@ class AuthService {
     required String adminName,
     required String adminUsername,
     required String adminPassword,
+    String? adminEmail,
     String? email,
     String? phone,
     String? address,
@@ -266,6 +267,7 @@ class AuthService {
           'slug': slug.trim().toLowerCase(),
           'adminName': adminName.trim(),
           'adminUsername': adminUsername.trim().toLowerCase(),
+          'adminEmail': adminEmail?.trim(),
           'adminPassword': adminPassword,
           'email': email?.trim(),
           'phone': phone?.trim(),
@@ -389,6 +391,7 @@ class AuthService {
     int? trialDays,
     String? gymOwnerName,
     String? gymOwnerUsername,
+    String? gymOwnerEmail,
   }) async {
     try {
       final token = await getToken();
@@ -405,13 +408,16 @@ class AuthService {
         'address': address?.trim(),
       };
 
-      if (gymOwnerName != null || gymOwnerUsername != null) {
+      if (gymOwnerName != null ||
+          gymOwnerUsername != null ||
+          gymOwnerEmail != null) {
         if (gymOwnerName == null || gymOwnerUsername == null) {
           throw Exception('Gym Owner name and username must both be provided.');
         }
         requestData.addAll({
           'gymOwnerName': gymOwnerName.trim(),
           'gymOwnerUsername': gymOwnerUsername.trim().toLowerCase(),
+          'gymOwnerEmail': gymOwnerEmail?.trim() ?? '',
         });
       }
       final bool licenseFieldsProvided =

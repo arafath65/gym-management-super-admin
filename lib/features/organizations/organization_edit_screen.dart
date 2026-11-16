@@ -24,6 +24,7 @@ class _OrganizationEditScreenState extends State<OrganizationEditScreen> {
   late final TextEditingController _notesController;
   late final TextEditingController _gymOwnerNameController;
   late final TextEditingController _gymOwnerUsernameController;
+  late final TextEditingController _gymOwnerEmailController;
 
   late String _licenseType;
   late DateTime _expiryDate;
@@ -70,6 +71,7 @@ class _OrganizationEditScreenState extends State<OrganizationEditScreen> {
     );
     _gymOwnerNameController = TextEditingController();
     _gymOwnerUsernameController = TextEditingController();
+    _gymOwnerEmailController = TextEditingController();
 
     _licenseType = organization['license_type']?.toString() ?? 'trial';
 
@@ -117,7 +119,8 @@ class _OrganizationEditScreenState extends State<OrganizationEditScreen> {
       setState(() {
         _gymOwner = owner;
         _gymOwnerNameController.text = owner?['full_name']?.toString() ?? '';
-        _gymOwnerUsernameController.text = owner?['email']?.toString() ?? '';
+        _gymOwnerUsernameController.text = owner?['username']?.toString() ?? '';
+        _gymOwnerEmailController.text = owner?['email']?.toString() ?? '';
         _isLoadingGymOwner = false;
         _gymOwnerError = null;
       });
@@ -141,6 +144,7 @@ class _OrganizationEditScreenState extends State<OrganizationEditScreen> {
     _notesController.dispose();
     _gymOwnerNameController.dispose();
     _gymOwnerUsernameController.dispose();
+    _gymOwnerEmailController.dispose();
     super.dispose();
   }
 
@@ -204,6 +208,7 @@ class _OrganizationEditScreenState extends State<OrganizationEditScreen> {
         gymOwnerUsername: _gymOwner == null
             ? null
             : _gymOwnerUsernameController.text,
+        gymOwnerEmail: _gymOwner == null ? null : _gymOwnerEmailController.text,
       );
 
       if (!mounted) return;
@@ -296,16 +301,36 @@ class _OrganizationEditScreenState extends State<OrganizationEditScreen> {
               const SizedBox(height: 14),
               _field(
                 controller: _gymOwnerUsernameController,
-                label: 'Login Username (Email)',
+                label: 'Login Username',
+                keyboardType: TextInputType.text,
+                validator: (value) {
+                  final username = (value?.trim() ?? '').toLowerCase();
+
+                  if (username.isEmpty) {
+                    return 'Login username is required';
+                  }
+
+                  if (!RegExp(r'^[a-z0-9][a-z0-9._-]{2,49}$')
+                      .hasMatch(username)) {
+                    return 'Use 3–50 characters: letters, numbers, dots, underscores or hyphens';
+                  }
+
+                  return null;
+                },
+              ),
+              const SizedBox(height: 14),
+              _field(
+                controller: _gymOwnerEmailController,
+                label: 'Gym Owner Email (Optional)',
                 keyboardType: TextInputType.emailAddress,
                 validator: (value) {
-                  final username = value?.trim() ?? '';
-                  if (username.isEmpty) return 'Login username is required';
-                  if (username.length > 150 ||
-                      !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
-                          .hasMatch(username)) {
+                  final email = value?.trim() ?? '';
+
+                  if (email.isNotEmpty &&
+                      !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
                     return 'Enter a valid email address';
                   }
+
                   return null;
                 },
               ),

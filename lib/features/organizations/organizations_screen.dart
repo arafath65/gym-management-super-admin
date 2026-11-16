@@ -124,6 +124,7 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
     final addressController = TextEditingController();
     final adminNameController = TextEditingController();
     final adminUsernameController = TextEditingController();
+    final adminEmailController = TextEditingController();
     final adminPasswordController = TextEditingController();
     final confirmAdminPasswordController = TextEditingController();
     final trialDaysController = TextEditingController(text: '14');
@@ -160,6 +161,7 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
                     adminName: adminNameController.text,
                     adminUsername: adminUsernameController.text,
                     adminPassword: adminPasswordController.text,
+                    adminEmail: adminEmailController.text,
                     email: emailController.text,
                     phone: phoneController.text,
                     address: addressController.text,
@@ -290,16 +292,31 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
                           const SizedBox(height: 14),
                           _formField(
                             controller: adminUsernameController,
-                            label: 'Admin Username (Email)',
+                            label: 'Gym Owner Username',
                             required: true,
+                            keyboardType: TextInputType.text,
+                            validator: (value) {
+                              final username = (value?.trim() ?? '')
+                                  .toLowerCase();
+                              if (username.isEmpty) {
+                                return 'Gym Owner username is required';
+                              }
+                              if (!RegExp(r'^[a-z0-9][a-z0-9._-]{2,49}$')
+                                  .hasMatch(username)) {
+                                return 'Use 3–50 characters: letters, numbers, dots, underscores or hyphens';
+                              }
+                              return null;
+                            },
+                          ),
+                          _formField(
+                            controller: adminEmailController,
+                            label: 'Gym Owner Email (Optional)',
                             keyboardType: TextInputType.emailAddress,
                             validator: (value) {
-                              final username = value?.trim() ?? '';
-                              if (username.isEmpty) {
-                                return 'Gym Admin username is required';
-                              }
-                              if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
-                                  .hasMatch(username)) {
+                              final email = value?.trim() ?? '';
+                              if (email.isNotEmpty &&
+                                  !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+                                      .hasMatch(email)) {
                                 return 'Enter a valid email address';
                               }
                               return null;
@@ -598,6 +615,7 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
       addressController.dispose();
       adminNameController.dispose();
       adminUsernameController.dispose();
+      adminEmailController.dispose();
       adminPasswordController.dispose();
       confirmAdminPasswordController.dispose();
       trialDaysController.dispose();
