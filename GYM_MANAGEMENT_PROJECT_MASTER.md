@@ -1,7 +1,7 @@
 # GYM MANAGEMENT PROJECT MASTER
 
 **Technical handover and continuation reference**
-**Last updated:** 18 November 2026 (office GitHub checkpoint: Trainer Management and Member Search/Registration API code pushed; Member API verification and outstanding integration tests recorded in Section 35)
+**Last updated:** 18 November 2026 (office checkpoint: API and Gym App member-management changes pushed to GitHub; Member Fitness API branch-scope correction included; Member Detail UI integration and Member Profile cross-branch authorization follow-ups recorded in Section 36)
 **Project owner / development context:** Innovex Fitness Center / Innovex Web Solutions
 **Primary development environment:** Office Windows laptop, PowerShell, Flutter, Node.js and MySQL 8. Current office-laptop project paths and GitHub release state are recorded in Sections 31 and 35. The office laptop is the active workstation for this continuation; no home-laptop changes were made as part of the 18 November checkpoint.
 
@@ -3478,3 +3478,178 @@ This file is the updated master handover dated 18 November 2026. The API and Gym
 ---
 
 **End of current authoritative master handover document (18 November 2026).**
+
+---
+
+## 36. Office GitHub Checkpoint — Member Fitness API and Member Management Flutter Source Push (18 November 2026)
+
+This is the latest authoritative continuation checkpoint after the user confirmed that the API and Gym App push operations both completed successfully from the office laptop on 18 November 2026. It supersedes the earlier “not yet pushed” wording in Sections 34 and 35 for the member-related files listed below. The office laptop was the source workstation. The user was leaving the office after the pushes; no home-laptop sync or home-laptop changes were part of this checkpoint. Sections 1–35 remain as historical records except where this section explicitly updates their implementation or release status.
+
+### 36.1 Repositories and release status
+
+The two project repositories pushed in this checkpoint are:
+
+| Project | Office folder | GitHub remote | Push result |
+|---|---|---|---|
+| Gym Management API | `gym_management_api` | `https://github.com/arafath65/gym-management-api.git` | User confirmed push completed successfully |
+| Gym Management App | `gym_management_app` | `https://github.com/arafath65/gym-management-apps.git` | User confirmed push completed successfully |
+
+The Super Admin repository was not part of these two source pushes. It is the target repository for the documentation-only commit containing this updated master file.
+
+The exact new commit hashes and post-push `git status` output for the two repositories were not included in the user's confirmation. Do not invent commit hashes or claim a particular clean-tree result. On the next office session, obtain the actual values with `git log -1 --oneline` and `git status -sb` in each repository. The previous confirmed commits remain useful historical references, but they are not necessarily the HEAD commit after this checkpoint:
+
+- API previous checkpoint: `cb9f3c2` — `Add trainer and member management APIs`.
+- Gym App previous checkpoint: `3234be1` — `Add trainer management and branch-aware staff UI`.
+
+### 36.2 API files included in the member-related push
+
+The release script staged the following reviewed paths in `gym_management_api`:
+
+```text
+src/controllers/memberController.js
+src/routes/memberRoutes.js
+src/services/memberIdentityService.js
+scripts/migrateMemberRegistrationSources.js
+src/controllers/memberFitnessController.js
+src/controllers/memberListController.js
+src/controllers/memberProfileController.js
+src/routes/memberFitnessRoutes.js
+src/services/storage/memberPhotoProcessor.js
+src/services/storage/memberPhotoStorage.js
+src/services/storage/memberProgressPhotoProcessor.js
+src/services/storage/memberProgressPhotoStorage.js
+```
+
+These files cover the member registration/search foundation already described in Section 35, member profile/list endpoints, member fitness history and progress-photo handling, and the associated storage/processing helpers. The migration script was included in the source push; this section does not assert that this particular migration script was executed unless a later database run is recorded.
+
+No `.env` file or NIC encryption/HMAC secret was included in the approved staged path list. Continue to keep `.env`, NIC secrets, plaintext NIC values, device activation codes/tokens, local uploaded images, backups and temporary verification files out of Git.
+
+### 36.3 Gym App files included in the member-related push
+
+The release script staged the following existing app configuration/entry files and the Dart sources under the new members feature:
+
+```text
+lib/features/auth/presentation/gym_authenticated_screen.dart
+pubspec.yaml
+pubspec.lock
+lib/features/members/**/*.dart
+```
+
+The members feature source directory was checked for Dart files before staging. The main authenticated Gym screen was updated to expose the Member Management section subject to the existing permission check. The member feature source includes the existing member-management/search/registration UI work. The push did not complete the Member Detail screen integration described in Section 36.7 below.
+
+### 36.4 Member Fitness API — implemented; local static verification passed
+
+The API Fitness module now includes authenticated endpoints under:
+
+```http
+/api/members/:memberId/fitness
+```
+
+The nested route is mounted from the member routes and inherits device and Gym Staff authentication. The route permission keys are:
+
+| Operation | Permission |
+|---|---|
+| List/get a member's fitness assessments | `member_fitness.view` |
+| Create an assessment | `member_fitness.create` |
+| Update an assessment | `member_fitness.update` |
+| Delete an assessment | `member_fitness.delete` |
+| View progress-photo status/retrieve photos | `member_fitness.photos.view` |
+| Upload/replace/delete progress photos | `member_fitness.photos.manage` |
+
+Assessment measurements supported by the controller:
+
+- `height_cm`
+- `weight_kg`
+- `bmi` (calculated from height and weight)
+- `arms_cm`
+- `waist_cm`
+- `thigh_cm`
+- `chest_cm`
+- `hips_cm`
+- `calves_cm`
+- Assessment date and notes
+
+Progress photos use the fixed types `front`, `side` and `back`. The current upload path accepts images up to 8 MB and processes them to WebP without intentionally cropping away body/measurement context. Create/update/delete mutations are designed to write operational audit events in the same database transaction as the corresponding mutation.
+
+**Cross-branch Fitness fix included before the push:** `ensureMember()` now scopes member lookup by authenticated organization plus member ID, not `registration_branch_id`. `ensureAssessment()` scopes the assessment by authenticated organization, member ID and assessment ID, not the member's registration branch. The active Gym Staff branch remains the branch recorded for new fitness assessments and associated audit entries. This allows authorized staff at another branch in the same organization to view/manage the member's fitness history without changing the member's original registration branch. Organization isolation remains mandatory.
+
+Static checks recorded as passed for the Fitness API patch include JavaScript syntax checking, controller/router module-load checks and `git diff --check`. No claim is made here that all authenticated live HTTP paths, database transaction edge cases or photo delivery have passed end-to-end testing.
+
+Local patch backups created during this work:
+
+```text
+C:\Users\Pradeep\AppData\Local\Temp\gym-member-fitness-api-20261118-152043
+C:\Users\Pradeep\AppData\Local\Temp\gym-member-fitness-branch-fix-20261118-161336
+```
+
+These are local recovery copies, not source assets to commit.
+
+### 36.5 Member profile and photo API — implemented, cross-branch correction still required
+
+The member profile controller and photo storage/processing files were included in the API push. The user confirmed the Member Profile with image feature as implemented. The existing profile service/UI also has member photo retrieval and upload support.
+
+A source review identified a remaining authorization/scope inconsistency that must be corrected before treating profile operations as organization-wide:
+
+1. `getMemberRow()` in `src/controllers/memberProfileController.js` still filters by `organization_id`, `registration_branch_id` and member ID. Member read/update/deactivate operations that use this helper therefore still restrict the member to their registration branch.
+2. The profile-photo update query also filters by `registration_branch_id`. This prevents a staff member at another branch in the same organization from managing the member's profile photo.
+3. The member detail `GET /:memberId` route in `src/routes/memberRoutes.js` was observed to require `members.update`. It should require `members.view`; changing a profile must continue to require `members.update`.
+4. The profile-not-found response still refers to the “active branch” and should be changed to a generic organization-scoped member-not-found message when the branch restriction is removed.
+
+These corrections were identified but were **not confirmed applied** in this checkpoint. Preserve the following rules when implementing them:
+
+- Member record ownership is organization-wide.
+- `registration_branch_id` is informational and must not restrict access by other authorized branches within the same organization.
+- The organization ID and actor/user ID must come from the verified Gym Staff session, never from the request body.
+- Any branch field recorded for an action/audit event must represent the current active branch from the authenticated Gym Staff session.
+- Cross-organization member access must remain impossible.
+
+### 36.6 Existing Flutter Member Management integration points
+
+The following source contracts were inspected before this checkpoint:
+
+- `lib/features/members/data/member_service.dart` already provides member search/list/create/get/update/deactivate/reactivate and profile-photo retrieval/upload methods.
+- `lib/core/services/gym_api_client.dart` already provides authenticated `get`, `post`, `patch`, `delete`, `getBytes` and multipart upload methods. These must be reused rather than creating another unauthenticated Dio client.
+- `MemberManagementScreen` already accepts `canView`, `canCreate`, `canUpdate`, `canDeactivate`, `organizationId`, `activeBranchId` and `activeBranchName`.
+- The current member search selection flow sets `_selectedMember`; the selected-member card still contains a placeholder message saying the detailed profile/rejoining workflow will be added in a later stage. Replace that placeholder with a permission-aware “View Profile” action/navigation without removing the existing registration/edit dialog workflow.
+- The authenticated Gym screen already opens Member Management under the `members.view` permission check.
+
+Do not silently change branch filtering of the general Member list without reviewing its intended query contract. The cross-branch profile/fitness rule is mandatory for a member record belonging to the organization; branch-specific lists may still use deliberate filter behavior if the UI clearly explains it.
+
+### 36.7 Member Detail screen — agreed design, integration pending
+
+The user specified a Member Detail screen with four tabs:
+
+1. **Overview** — member profile information and profile image.
+2. **Fitness** — fitness assessment history, measurements, BMI, front/side/back progress photos and comparison with the previous assessment.
+3. **Membership** — placeholder tab for future subscription/membership integration.
+4. **Programs** — placeholder tab for future program enrollment integration.
+
+The profile view and fitness data should be loaded through the existing authenticated service/API layer. Photo retrieval must use the authenticated byte-response method and must not expose filesystem paths or public unauthenticated image URLs. The Fitness tab must respect `member_fitness.view`, and photo controls must additionally respect `member_fitness.photos.view` / `member_fitness.photos.manage`. Create/update/delete controls must separately respect the corresponding Fitness permission. The Membership and Programs tabs should be clearly marked as coming later; do not create fake subscription/enrollment records or imply those workflows exist.
+
+The Member Detail screen, tab navigation, previous-assessment comparison UI, and integration from the selected-member search result were **not yet implemented or verified** in this checkpoint. The user had not run the subsequent read-only PowerShell inspection step that was supplied immediately before leaving the office; the earlier source review is sufficient to retain the known integration points above, so do not ask the user to repeat that inspection before resuming.
+
+### 36.8 Required next steps
+
+Resume from the office laptop with fresh repository status checks before editing. The priorities are:
+
+1. **Fix member profile cross-branch authorization/scope** in `memberProfileController.js`: remove registration-branch filters from the common member lookup and profile-photo update query while retaining organization/member ID checks and active-branch audit context.
+2. **Correct the member detail GET permission** in `memberRoutes.js` from `members.update` to `members.view`; keep mutation routes under their update/deactivate permissions.
+3. Add/verify authenticated live API tests for profile retrieval, edit, photo retrieval/upload/replace, Fitness list/assessment CRUD, front/side/back photo retrieval/upload/replace/delete, permission denial and cross-organization denial. Use synthetic test members/data; never paste a real NIC or secrets into chat.
+4. Complete the Flutter Member Detail screen with the four agreed tabs, connect it to the existing member service/API client, and wire the selected-member “View Profile” action. Preserve existing member registration and editing.
+5. Implement Fitness assessment history, measurement/BMI display, front/side/back photo viewer/upload controls, and comparison against the previous assessment. Clearly handle the first assessment, absent measurements and missing photos.
+6. Run `node --check` for all changed API files, route/module load checks, `git diff --check`, `flutter analyze` for the Gym App, and authenticated integration tests. Record only checks actually run and their results.
+7. Commit/push the next API and Gym App changes separately after reviewing exact staged paths. Do not use `git add .` and do not amend or force-push the completed 18 November release.
+
+### 36.9 Documentation release status
+
+This Section 36 is the latest member-management continuation record. The API and Gym App source changes described above were confirmed by the user as pushed. This master `.md` document itself still needs a separate documentation-only commit in the `gym_management_super_admin` repository. Before committing:
+
+- Check the Super Admin working tree and fetch `origin/main`.
+- Identify the existing canonical master-document filename in the repository root rather than overwriting an unknown file.
+- Copy this updated document into that canonical location (or use a clearly versioned new filename if no canonical master exists).
+- Stage only the selected `.md` file, inspect `git diff --cached --stat` and `git diff --cached --name-only`, then commit and push to `origin/main`.
+- Do not include unrelated Super Admin source changes in the documentation commit. Do not use `git add .`.
+
+---
+
+**End of current authoritative master handover document (18 November 2026, Section 36).**
