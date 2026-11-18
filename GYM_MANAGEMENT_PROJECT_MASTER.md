@@ -1,9 +1,9 @@
 # GYM MANAGEMENT PROJECT MASTER
 
 **Technical handover and continuation reference**
-**Last updated:** 14 November 2026 (Gym Staff role/permission API foundation, permission-scope migration, Gym App operational modules, device transfers and synchronized GitHub release)
+**Last updated:** 18 November 2026 (office GitHub checkpoint: Trainer Management and Member Search/Registration API code pushed; Member API verification and outstanding integration tests recorded in Section 35)
 **Project owner / development context:** Innovex Fitness Center / Innovex Web Solutions
-**Primary development environment:** Office Windows laptop, PowerShell, Flutter, Node.js and MySQL 8. Current office-laptop project paths are recorded in Section 31. Do not assume the home laptop has these latest unpushed changes.
+**Primary development environment:** Office Windows laptop, PowerShell, Flutter, Node.js and MySQL 8. Current office-laptop project paths and GitHub release state are recorded in Sections 31 and 35. The office laptop is the active workstation for this continuation; no home-laptop changes were made as part of the 18 November checkpoint.
 
 > **Purpose.** This document is the durable technical handover for continuing the Gym Management project in a new ChatGPT conversation. It records decisions, source paths, database facts, endpoints, implementation state, debugging history and pending work. It deliberately distinguishes verified implementation from requirements that have only been discussed. Unknown schema details are identified as unknown rather than guessed.
 
@@ -27,7 +27,7 @@ The intended product scope includes:
 
 ### Current product boundary
 
-The platform-management foundation is substantially further along than the day-to-day gym operations application. The Super Admin Flutter app and Node API include organization, device, license and secured branch management. Initial Gym Owner/Gym Admin provisioning during organization creation, Gym Owner account lookup/editing and Platform Admin password reset are now implemented and reported complete in the Super Admin workflow (see Section 30). Full Gym Staff authentication/session handling and tenant-side user/role/permission management remain pending. Membership, payments, programs, enrollments and fitness progress remain product requirements, not confirmed completed modules in the current Flutter/API codebase.
+The platform-management foundation and the first operational Gym App modules are implemented in the office-laptop working copies. The Super Admin app/API include organization, device, license, initial Gym Owner provisioning, Gym Owner account editing and Platform Admin password reset. The Gym App/API now include device activation/validation, Gym Staff authentication and session handling, branch switching, a global active-branch selector, Staff Management with selected-branch filtering/refresh, branch/device/audit modules, Membership Plan and Fitness Program modules, and Trainer Management with profile-photo handling. The user has manually confirmed that active-branch switching and the Staff list refresh work together in the running app. Trainer API/UI and photo upload code have passed the recorded syntax/analyzer/storage checks; see Section 34 for the exact scope and qualifications. The Flutter Role & Permission management UI is still pending even though the Gym Role API and permission-scope migration exist. Member Management, attendance, membership enrolment/billing, payments/refunds, reports and member fitness-progress history are not confirmed complete. A module being present must not be treated as proof that every business rule or error path is production-tested.
 
 The original design considered an organization/tenant with multiple branches. The user later said full multi-tenant complexity could be deferred initially while branch-wise operations remained necessary. The implemented platform layer nevertheless has an `organizations` boundary, organization-owned branches, licenses and devices. The current state is therefore organization-scoped at the platform/device/license level; do not assume all future operational data APIs are already tenant-isolated.
 
@@ -2904,4 +2904,577 @@ The immediate next steps for the next development session are:
 
 ---
 
-**End of current authoritative master handover document (14 November 2026).**
+---
+
+## 34. Current Office-Laptop Checkpoint — Gym Staff Sessions, Global Branch Selector, Staff Filtering and Trainer Management (17 November 2026)
+
+This is the newest continuation checkpoint, based on the office-laptop work and user-reported tests through 17 November 2026. It supersedes earlier statements in Sections 1, 32 and 33 wherever they describe Gym Staff authentication/branch switching as pending, Staff Management as absent, or Trainer Management as not implemented. Sections 1–33 remain useful historical records; do not delete them. The 14 November GitHub commits in Section 33.2 remain the last verified remote commits. The work described below is in the current office-laptop working copies and **has not been confirmed committed/pushed**.
+
+### 34.1 Active workstation and project paths
+
+Continue on the office Windows laptop. Project root:
+
+```text
+C:\Users\Pradeep\Documents\INNOVEX WEB\Flutter Projects
+```
+
+Repositories:
+
+```text
+gym_management_api\
+gym_management_app\
+gym_management_super_admin\
+```
+
+GitHub remotes remain those in Sections 3 and 33.2:
+
+- API: `https://github.com/arafath65/gym-management-api.git`
+- Gym App: `https://github.com/arafath65/gym-management-apps.git`
+- Super Admin: `https://github.com/arafath65/gym-management-super-admin.git`
+
+The last remote synchronization checkpoint is still the 14 November commit set in Section 33.2. No new commit hashes or successful push results have been supplied for the 15–17 November changes. Therefore, treat the changes in this section as local/unreleased until fresh `git status`, commit, fetch and `origin/main` comparison checks prove otherwise. Each repository must be reviewed and pushed independently. Do not use `git add .`; never stage `.env`, credentials, activation codes, plaintext tokens, local uploads, build output, dependency folders or temporary backups.
+
+### 34.2 Gym Staff authentication and session behavior
+
+The Gym Staff authentication/session implementation is now integrated into the Gym App workflow rather than remaining only an API foundation.
+
+Relevant API source files include:
+
+```text
+src/controllers/gymAuthController.js
+src/middleware/gymStaffAuthMiddleware.js
+src/routes/gymAuthRoutes.js
+src/controllers/gymStaffController.js
+```
+
+The API mounts Gym Staff authentication under `/api/gym-auth`. The branch-switch endpoint is:
+
+```http
+POST /api/gym-auth/switch-branch
+```
+
+It is protected by device authentication, Gym Staff JWT authentication and the `branches.switch` permission. The session creation flow validates that the requested branch belongs to the authenticated user's organization, is active and is within the user's authorized branch scope. A successful switch issues a replacement Gym Staff JWT carrying the selected active `branchId`; the session is refreshed in the app. The API also exposes the authenticated user's session/branch information through the Gym Auth `/me` workflow.
+
+Flutter implementation details:
+
+- `GymAuthService.switchBranch` reads the saved Gym Staff session token and device token, calls the switch-branch API, saves the returned session token and restores the session context.
+- The authenticated screen refreshes its in-memory staff/session state after the API returns the new session.
+- The selected active branch is session context; the device's original `registered_branch_id` remains separate and is not changed by switching.
+
+Authorization rules remain mandatory:
+
+- System Gym Admin can access all active branches belonging to its own organization, subject to the Gym Admin role and its configured permissions.
+- A regular Gym Staff user can access only branches assigned through `user_branch_access` and allowed by their permissions.
+- Backend checks are authoritative. Do not trust a branch or organization ID supplied by the Flutter client as authenticated identity.
+- Device authentication remains organization-bound. A device may be used at another branch within the same organization; it must not be used across organizations.
+- Every branch-scoped API must derive the active branch from the verified Gym Staff session (`req.gymStaff.branchId`) and separately enforce user branch access.
+
+### 34.3 Global active-branch selector — implemented and manually tested
+
+The Flutter global branch selector is now rendered in the main authenticated-screen top bar, using `_buildBranchSelector` from `gym_authenticated_screen.dart`. Previously, the selector was only rendered inside Branch Management. The Branch Management screen is no longer passed the duplicate session selector from the parent authenticated screen.
+
+Current behavior:
+
+- The selector uses the accessible branch list returned with the Gym Staff session.
+- It is available when the user has more than one accessible branch and is allowed to switch (`branches.switch`; the System Gym Admin UI path is also recognized).
+- The top bar has a compact presentation on narrower layouts and a fuller branch label on wider layouts.
+- Selecting another branch invokes the session switch API; the app saves the replacement JWT and updates its active staff/session state.
+- The top-bar branch is the **active working branch**, not the device's registration/default branch.
+- Selecting a branch does not update `devices.registered_branch_id`.
+
+**User test result, 17 November 2026:** after restarting the API and hot-restarting/running the Gym App, the user confirmed that the global branch selector was working. Treat this branch-selection flow as manually tested in the current app environment. Do not infer that all other Gym Staff endpoints or all permission-denial combinations have been tested.
+
+### 34.4 Staff Management — selected-branch filtering and automatic refresh
+
+The Staff API list now scopes staff records to the active working branch derived from the authenticated Gym Staff session.
+
+Backend change in `src/controllers/gymStaffController.js`:
+
+- Reads the active branch from `req.gymStaff.branchId` (verified JWT context), not from a client query parameter.
+- Validates that the active branch is present in the actor's accessible branch IDs; otherwise it rejects the request.
+- Adds a SQL `EXISTS` condition against `user_branch_access` so only staff assigned to the selected active branch are included.
+- Retains organization scoping and the different access rules for System Gym Admin and regular staff.
+- The selected branch is not accepted from an arbitrary client-supplied `branch_id` parameter as a substitute for the authenticated session.
+
+Flutter change in `lib/features/staff/presentation/staff_management_screen.dart`:
+
+- `StaffManagementScreen` now receives `activeBranchId` from the authenticated parent screen.
+- `didUpdateWidget` detects an active-branch change, resets the page to page 1, clears the expanded staff row/card and reloads the staff list.
+- The active branch property is a UI refresh trigger. The actual API branch scope is still derived by the backend from the current Gym Staff JWT.
+- This resolves the stale-list behavior where the parent session changed but the existing StatefulWidget retained its previous state and only loaded staff in `initState`.
+
+The main authenticated screen passes the current active branch from its refreshed session into Staff Management.
+
+**User test result, 17 November 2026:** the user confirmed that switching branches while using the app works and that the Staff list updates correctly. This is a manually confirmed integration behavior for the selected-branch staff list. Continue to test separate user roles, cross-branch staff assignments and denied access paths as part of security testing.
+
+### 34.5 Trainer Management — API and Flutter module added
+
+Trainer profiles are implemented as organization-level profiles, separate from Gym Staff login accounts. A trainer may be assigned to more than one branch using the trainer-to-branch mapping. The active branch is automatically assigned when a new trainer is created from a branch context, according to the implemented workflow.
+
+API files added/updated include:
+
+```text
+scripts/migrateTrainers.js
+src/controllers/trainerController.js
+src/routes/trainerRoutes.js
+src/services/storage/localStorageProvider.js
+```
+
+The trainer routes are mounted under:
+
+```text
+/api/trainers
+```
+
+The migration was run successfully in the office database. The trainer data model includes the trainer profile and a branch-assignment relationship (`trainer_branch_access`). The precise full DDL should be re-read from the current database before any schema change; this handover does not substitute for `SHOW CREATE TABLE`.
+
+Trainer permission keys introduced for the module:
+
+- `trainers.view`
+- `trainers.create`
+- `trainers.update`
+- `trainers.deactivate`
+- `trainers.assign_branches`
+
+The implemented API/UI workflow includes trainer listing and details, create, update, deactivate/reactivate, viewing assigned branches, assigning a trainer to a branch and removing a branch assignment. Backend writes use organization scoping and transaction/audit handling. Trainers are not staff login users and must not be added to `users` or `user_roles` merely to support trainer profiles.
+
+The Gym App has a dedicated Trainer Management feature under:
+
+```text
+lib/features/trainers/
+```
+
+The authenticated app passes available branch information and active branch context to the trainer screen. Existing profile-management and branch-assignment flows were retained when photo handling was added. The user reported the Trainer module work as functioning; maintain the distinction between user-tested flows and untested edge/error cases.
+
+### 34.6 Trainer profile-photo storage and upload workflow
+
+The API and Flutter Trainer module now support profile-photo retrieval, upload, replacement and removal.
+
+**API dependencies and processing**
+
+- API packages added: `multer` (reported installed version `2.5.0`) and `sharp` (reported installed version `0.35.5`).
+- Upload limit: 2 MB.
+- Accepted input formats: JPEG, PNG and WebP; Sharp validates/decode-checks the actual image content rather than relying only on the submitted MIME type.
+- Image processing rejects files above the configured 20-megapixel input limit, applies orientation correction, center-crops/resizes to 512 × 512 and converts the stored output to WebP at quality 82.
+- Multer uses memory storage before validated image processing; uploads are not written using the untrusted original filename.
+
+**Local file storage**
+
+- Storage provider: `src/services/storage/localStorageProvider.js`.
+- Files are placed under organization/trainer-specific relative keys, following this pattern:
+
+```text
+organizations/{organizationId}/trainers/{trainerId}/profile-{uuid}.webp
+```
+
+- The path provider validates that resolved paths remain under the configured storage root and uses generated safe filenames.
+- Local API `.env` setting used on the office laptop:
+
+```env
+UPLOAD_ROOT=C:/Innovex-Gym-Data/uploads
+```
+
+- The corresponding local folder was created at `C:\Innovex-Gym-Data\uploads`.
+- `.env` is local configuration and must not be committed. The storage root must exist and be writable by the API process.
+- The storage helper was exercised with an image conversion, file save/read and cleanup test; the test completed successfully.
+
+**Photo API behavior**
+
+Mounted under `/api/trainers`:
+
+| Method | Endpoint | Permission | Purpose |
+|---|---|---|---|
+| GET | `/:trainerId/photo` | `trainers.view` | Return the trainer's stored photo as WebP |
+| POST | `/:trainerId/photo` | `trainers.update` | Validate, process and replace/upload trainer photo |
+| DELETE | `/:trainerId/photo` | `trainers.update` | Remove trainer photo |
+
+All three endpoints also require the appropriate device and Gym Staff authentication, organization ownership and trainer access checks defined by the routes/controller. Photo responses use `image/webp` and private/no-store cache behavior.
+
+- Upload DB changes and `TRAINER_PHOTO_UPDATED` audit write are performed in a transaction.
+- Removal DB changes and `TRAINER_PHOTO_REMOVED` audit write are performed in a transaction.
+- The previous stored file is deleted only after the database commit succeeds; a newly written file is cleaned up on a confirmed rollback.
+- Direct JSON writes to `profile_photo_path` were removed from the normal trainer create/update allowlist so clients cannot change the storage reference without the photo endpoint.
+- The controller exports for `getTrainerPhoto`, `uploadTrainerPhoto` and `removeTrainerPhoto`, and the trainer route module load were checked successfully after patching.
+
+**Flutter photo behavior**
+
+- Uses the existing `image_picker` and Dio packages.
+- `GymApiClient` now supports authenticated byte retrieval and authenticated multipart upload; binary JSON error responses are decoded for useful API error messages.
+- Trainer service methods support photo GET, multipart upload and DELETE.
+- Trainer UI supports image selection, preview, uploading the selected image after the trainer save flow, display in trainer cards/details, replace and remove.
+- The client enforces the same 2 MB upload ceiling before sending the photo.
+
+**Validation recorded:** API storage conversion/read/delete test passed; API JavaScript syntax, controller export and route-load probes passed; Flutter analyzer reported `No issues found` after the Trainer photo UI integration. These checks do not replace deployment testing of file permissions, backup/restore, concurrent upload behavior or production storage durability.
+
+### 34.7 Latest code validation and manual test checkpoint
+
+The 17 November changes were applied with timestamped backups before patching. In particular:
+
+- Trainer photo API patch: controller exports and route loading were checked; JSON photo-path protection was checked.
+- Trainer photo Flutter service/UI integration: `flutter analyze` completed with `No issues found` after the relevant changes.
+- Global branch selector and Staff refresh patch: the patch script ran the API `node --check`, Dart formatting and full `flutter analyze` steps and reached its final success message without triggering the restore-on-failure path.
+- The API and app were restarted/restarted for user testing. The user explicitly confirmed that the global branch selector and Staff list refresh were working.
+
+Do not state that a fresh full integration/automated test suite has passed. The user's confirmation applies to the branch-switch and Staff-refresh flow. Individual trainer features were reported functioning during their implementation, while production hardening and edge-case testing remain follow-ups.
+
+### 34.8 Local changes and release hygiene
+
+The last known change inventory from the office laptop included modifications/additions in the following areas. This is a guide to what must be reviewed, **not a substitute for running fresh `git status`**:
+
+API:
+
+```text
+package.json
+package-lock.json
+src/server.js
+src/controllers/gymStaffController.js
+src/controllers/trainerController.js
+src/routes/trainerRoutes.js
+src/services/storage/localStorageProvider.js
+scripts/migrateTrainers.js
+```
+
+Gym App:
+
+```text
+lib/core/services/gym_api_client.dart
+lib/features/auth/presentation/gym_authenticated_screen.dart
+lib/features/staff/presentation/staff_management_screen.dart
+lib/features/trainers/
+```
+
+The photo-processing helper and any other associated files must also be captured by a fresh `git status`/diff review rather than relying on this summary. A temporary helper named `scripts/_verify_trainer_photo_api.js` appeared as untracked in one intermediate API status; check whether it still exists and remove it only if it is merely a verification artifact and no longer needed. Do not add temporary verification or backup files to the release.
+
+The npm installation output reported two moderate vulnerabilities. No forced `npm audit fix` was run as part of this work. Review `npm audit` separately and assess each advisory; do not use `npm audit fix --force` or accept breaking dependency upgrades without testing.
+
+Before release:
+
+1. Run fresh `git status --short --branch` separately in all three repositories.
+2. Inspect `git diff` and untracked file contents; verify that the trainer migration and all required source files are included.
+3. Confirm `.env`, local photo files, private data, backup directories, temporary scripts, `node_modules`, build output and `.dart_tool` are not staged.
+4. Run `node --check` on changed API JavaScript files, `git diff --check`, and full `flutter analyze` in the Gym App.
+5. Test the photo upload/retrieve/replace/remove flows against the running API and verify audit rows and organization isolation.
+6. Commit and push API and Gym App independently. Copy this updated master document into the Super Admin repository and commit/push that documentation update separately. Do not claim a release until `origin/main` has been fetched and compared with local `main` for each repository.
+
+### 34.9 Current module status and outstanding work
+
+| Area | Status as of 17 November 2026 | Remaining work / qualification |
+|---|---|---|
+| Super Admin organizations, Gym Owner provisioning and password reset | Implemented in the 11 November release | Preserve separate Platform Admin RBAC; permission middleware enforcement still needs review where noted in earlier sections |
+| Device activation and startup validation | Implemented; startup validation was exercised for a deleted-device case earlier | Repeat revoked/pending/expired-code and license scenarios after a fresh hot restart; foreground-resume revalidation and public activation rate limiting remain hardening items |
+| Gym Staff authentication/session | Implemented and integrated into the Gym App | Continue endpoint-level tests for locked/inactive users, expired JWTs and unauthorized requests |
+| Global active-branch selector | Implemented in top bar; user manually confirmed working | Test additional staff roles and permission-denial cases |
+| Staff selected-branch list filter/refresh | Implemented in API and Flutter; user manually confirmed working | Test users assigned to multiple branches, regular-staff visibility rules and cross-organization denial |
+| Gym Branch Management | API/service/screen exist | Verify create/update/status, permissions and transactional audit coverage per endpoint |
+| Device Management / branch transfer | Implemented and manual transfer was reported working | Continue permissions, transfer-history and audit edge-case tests |
+| Gym Role & Permission API | API/controller/routes and permission-scope migration exist | Flutter Role & Permission management screen remains pending; test all role CRUD/assignment rules and audits |
+| Staff Management | Screen/service/API integration exists; active-branch refresh now tested | Test create/edit/deactivate, role assignment, branch assignments and denied operations comprehensively |
+| Membership Plans | API, migration and Flutter screen/service exist | Verify ongoing-member interactions and full plan lifecycle; this is not the same as membership enrolment/payment processing |
+| Fitness Programs | API, migration and Flutter screen/service exist | Verify all CRUD/enrollment/progress rules with real API/database tests; do not assume every program workflow is complete |
+| Trainer Management | API, migration and Flutter UI added; permissions and branch mapping included | Continue authorization, validation, multi-branch and audit tests; profile photo storage is currently local filesystem based |
+| Trainer photo upload | API/Flutter flow implemented; conversion/storage and static checks passed | Test full authenticated upload/retrieve/replace/remove in deployment-like environment; establish durable backups/shared storage before multi-instance production |
+| Members and fitness progress | Not confirmed implemented | Build member CRUD, profile images, historical measurements and progress photos |
+| Attendance | Not confirmed implemented | Keep members organization-wide; record the branch actually attended, separate from member home branch |
+| Membership enrolment, billing and payments | Not confirmed implemented | Define lifecycle, renewals, freezes/cancellations, approvals, receipts, balances, refunds and reconciliation |
+| Services and reports | Not confirmed implemented | Continue after membership/payment rules are finalized |
+| Operational audit coverage | Audit infrastructure/modules exist; Trainer writes include photo audit events | Verify audit coverage/authorization for every meaningful Gym Staff operation |
+
+### 34.10 Next continuation sequence
+
+1. **Preserve and release this checkpoint safely.** Review all local changes in API and Gym App; inspect any temporary verification file and backup artifacts; run full validation; then commit/push each repository separately only after the user approves the release.
+2. **Finish Role & Permission Management UI.** Inspect the actual `gymRoleRoutes.js` and `gymRoleController.js` API contract, build the Flutter UI using only Gym-scoped permissions, protect the System Gym Admin role and test `roles.view/create/update/delete/assign` with allowed and denied users.
+3. **Complete Staff Management security tests.** Test staff creation/edit/deactivation, role assignment, multi-branch access, branch switching and selected-branch visibility using Gym Admin and regular staff accounts.
+4. **Complete Trainer module integration tests.** Test create/edit/deactivate/reactivate, branch assignment/removal, profile image selection/upload/retrieve/replace/remove, permission denial, cross-organization access denial, audit persistence and behavior when the local upload volume is unavailable.
+5. **Harden image storage for production.** Ensure the upload root is persistent, backed up and access-restricted. If the API is deployed to multiple instances or separate hosting nodes, plan shared/object storage rather than relying on one machine's local filesystem. Keep the upload directory outside the public web root and serve photos only through authenticated API checks.
+6. Continue Member Management, member fitness progress, Attendance, Membership Enrolment/Payments, Services and reports in the dependency order agreed in earlier sections.
+
+### 34.11 Instructions for future ChatGPT continuation
+
+- Treat Section 34 as the latest authoritative checkpoint as of 17 November 2026. The 14 November GitHub commit hashes in Section 33.2 are historical remote references, not proof that the current local Trainer/branch-selector changes have been pushed.
+- Use the office-laptop project paths in Section 34.1. Do not assume the home laptop contains the latest local work.
+- The global active-branch selector and selected-branch Staff refresh were manually confirmed by the user. Do not repeat this implementation unless a new defect is reported.
+- Always preserve the difference between device registration branch and Gym Staff active working branch. Branch switching updates the Gym Staff session JWT, not the device registration.
+- The Staff list API must continue deriving the active branch from the verified Gym Staff JWT. Do not add a client-controlled branch parameter as a security substitute.
+- Trainers are organization-level profiles with branch mappings, not Gym Staff login accounts.
+- Trainer photo files are stored on the office API host under `UPLOAD_ROOT`; the `.env` file and actual uploaded images are local-only and must not be committed.
+- Continue separating implementation, syntax validation, analyzer validation, user-reported manual testing and production readiness. Do not label an entire module production-ready because a single flow passed.
+
+---
+
+**End of current authoritative master handover document (17 November 2026).**
+
+---
+
+## 35. Office-Laptop Checkpoint — GitHub Release and Member Search/Registration API (18 November 2026)
+
+This section is the latest authoritative continuation checkpoint as of 18 November 2026. It supersedes the unreleased/local-only Git status statements in Sections 34.1, 34.8 and 34.11. Older sections remain as historical records unless they conflict with this section. The office laptop remains the active development workstation. The user confirmed that no work or modification was made on the home laptop; no home-laptop synchronization is needed for this checkpoint.
+
+### 35.1 Active office environment and repositories
+
+Continue on the office Windows laptop. The project root is:
+
+```text
+C:\Users\Pradeep\Documents\INNOVEX WEB\Flutter Projects
+```
+
+Project folders:
+
+```text
+gym_management_api\
+gym_management_app\
+gym_management_super_admin\
+```
+
+The three repositories remain independent and must be committed/pushed separately:
+
+| Project | GitHub remote | Latest confirmed office commit on 18 November |
+|---|---|---|
+| API | `https://github.com/arafath65/gym-management-api.git` | `cb9f3c2` — `Add trainer and member management APIs` |
+| Gym App | `https://github.com/arafath65/gym-management-apps.git` | `3234be1` — `Add trainer management and branch-aware staff UI` |
+| Super Admin | `https://github.com/arafath65/gym-management-super-admin.git` | No new source commit in this checkpoint; next action is to commit the updated master handover document there |
+
+The user ran the commit and push commands separately for the API and Gym App. Both pushes to `origin/main` completed successfully. The subsequent `git status` output for each repository reported:
+
+```text
+On branch main
+Your branch is up to date with 'origin/main'.
+nothing to commit, working tree clean
+```
+
+The API release commit reported 14 files changed, 5,385 insertions and 4 deletions. The Gym App release commit reported 5 files changed, 2,723 insertions and 61 deletions. These are Git change statistics, not counts of completed or integration-tested features.
+
+**API commit contents reported by Git:**
+
+```text
+package.json
+package-lock.json
+scripts/migrateMembers.js
+scripts/migrateTrainers.js
+src/controllers/gymStaffController.js
+src/controllers/memberController.js
+src/controllers/memberSearchController.js
+src/controllers/trainerController.js
+src/routes/memberRoutes.js
+src/routes/trainerRoutes.js
+src/server.js
+src/services/memberIdentityService.js
+src/services/storage/localStorageProvider.js
+src/services/storage/trainerPhotoProcessor.js
+```
+
+**Gym App commit contents reported by Git:**
+
+```text
+lib/core/services/gym_api_client.dart
+lib/features/auth/presentation/gym_authenticated_screen.dart
+lib/features/staff/presentation/staff_management_screen.dart
+lib/features/trainers/data/trainer_service.dart
+lib/features/trainers/presentation/trainer_management_screen.dart
+```
+
+Before a later release, re-run fresh status/fetch checks. Do not assume the working trees remain clean after new development.
+
+### 35.2 Member database migration — completed
+
+The member migration was run successfully on the office database on 17 November 2026 using `scripts/migrateMembers.js`.
+
+Tables created or verified:
+
+- `members`
+- `member_fitness_progress`
+- `member_progress_photos`
+
+The migration also registered/updated 10 Gym Staff permission keys and synchronized the system Gym Admin roles. The reported output was:
+
+- `permissionsCreatedOrUpdated: 10`
+- `gymAdminRolesVerified: 3`
+- `organizationsProcessed: 3`
+- `customRolesModified: false`
+
+Permission keys:
+
+| Permission | Purpose |
+|---|---|
+| `members.view` | Search/view member records |
+| `members.create` | Register members |
+| `members.update` | Update member profile |
+| `members.deactivate` | Deactivate member |
+| `member_fitness.view` | View fitness progress |
+| `member_fitness.create` | Record fitness progress |
+| `member_fitness.update` | Update fitness progress |
+| `member_fitness.delete` | Delete fitness progress, subject to the agreed audit/business rules |
+| `member_fitness.photos.view` | View progress photos |
+| `member_fitness.photos.manage` | Manage progress photos |
+
+The migration output reported permission IDs 38–47 in the order above. Do not rely on these numeric IDs in application code; use the stable permission keys.
+
+The `members` table stores NIC material in encrypted/index fields only (`nic_ciphertext`, `nic_iv`, `nic_auth_tag`, `nic_lookup_hash`, `nic_last4`) and has no plaintext NIC column. Its NIC encryption fields are constrained so that they are either all null or all populated. It stores `registration_branch_id` separately from optional `preferred_branch_id`, and stores a member-level admission-fee state. The organization-scoped unique keys cover `member_code` and `nic_lookup_hash`.
+
+`member_fitness_progress` stores dated measurement history; measurements are optional and include height, weight, BMI, arms, waist, thigh, chest, hips and calves. `member_progress_photos` associates at most one photo of each fixed type (`front`, `side`, `back`) with a progress record, with a composite relationship to prevent cross-member progress-photo association. The tables exist, but the progress API, photo upload flow and Flutter screens are not yet confirmed implemented.
+
+Permission backup tables created by the migration:
+
+```text
+permissions_backup_members_20261117112727_20960_0704
+role_permissions_backup_members_20261117112727_20960_0704
+```
+
+These are rollback/audit artifacts in the database. Do not delete them without an explicit database backup/retention decision.
+
+### 35.3 Member NIC identity service — implemented and statically verified
+
+Source file:
+
+```text
+src/services/memberIdentityService.js
+```
+
+The service currently provides:
+
+- Format recognition for old Sri Lankan NIC format (9 digits plus `V`/`X`) and new NIC format (12 digits).
+- Birth-date and gender decoding based on the NIC date-of-year portion.
+- Multiple candidate birth dates for ambiguous old-NIC centuries; registration requires an explicit user-confirmed date rather than silently selecting a century.
+- Sri Lankan phone number normalization, including conversion of a local `0...` number into the `94...` form used for normalized lookup.
+- AES-256-GCM NIC encryption with a random 12-byte IV and 16-byte authentication tag.
+- HMAC-SHA256 for exact NIC lookup, using a separate secret from the encryption key.
+- NIC last-four storage for masked display.
+
+The two required local environment variables are:
+
+```env
+MEMBER_NIC_ENCRYPTION_KEY=<64 hexadecimal characters representing 32 random bytes>
+MEMBER_NIC_LOOKUP_SECRET=<64 hexadecimal characters representing 32 random bytes>
+```
+
+Both are stored in the office API `.env`, which is Git-ignored. The user verified that `.env` is not tracked by Git. Never commit, paste, print, or regenerate these secrets after NIC data is stored. A replacement key would make existing encrypted NIC values unreadable and existing HMAC lookup values unmatched. A future key-rotation design must re-encrypt/re-HMAC existing records under a controlled migration before replacing active keys.
+
+NIC format validation is not a proof of identity and does not independently verify a person. Do not treat a decoded DOB/gender as authoritative until the member confirms the details. The current implementation checks supported shapes and date-of-year validity; do not claim a separate government identity verification or NIC checksum service.
+
+### 35.4 Member Search API — installed and route-protected
+
+Source files:
+
+```text
+src/controllers/memberSearchController.js
+src/routes/memberRoutes.js
+```
+
+Mounted route:
+
+```http
+GET /api/members/search?q=<search-text>
+```
+
+Middleware order:
+
+1. `authenticateDevice`
+2. `authenticateGymStaff`
+3. `requireGymPermission('members.view')`
+
+Search behavior:
+
+- Partial full-name search.
+- Partial normalized primary/secondary phone search.
+- Exact full-NIC match using the HMAC lookup hash; partial NIC fragment search is intentionally not implemented.
+- Organization scope comes from the verified `req.gymStaff.organizationId` session, not a client-supplied organization ID.
+- Returns up to five matches, including inactive/blocked records for duplicate prevention and rejoining workflows.
+- Returns masked NIC/phone fields rather than ciphertext, HMAC or plaintext NIC.
+- Search requests do not write the raw search query or NIC into audit descriptions.
+
+### 35.5 Member Registration API — code installed; live creation still pending
+
+Source file:
+
+```text
+src/controllers/memberController.js
+```
+
+Route:
+
+```http
+POST /api/members
+```
+
+The route uses the same device/Gym Staff authentication sequence and requires `members.create`.
+
+Implemented request validation/registration behavior includes:
+
+- Full name is required; NIC is currently optional at the API level.
+- Optional contact, email, address/city, emergency contact, preferred branch, registration source and referral fields are validated.
+- NIC is validated, decoded and encrypted before being written; no plaintext NIC is stored.
+- Existing NIC HMAC values are checked within the authenticated organization before insertion; the database unique key is the final duplicate-race protection.
+- The organization ID and creator user ID come from the verified Gym Staff session.
+- `registration_branch_id` comes only from the active branch in the authenticated Gym Staff session. It is never accepted from the client body.
+- Optional `preferred_branch_id` must be in the staff actor's accessible branch list and is rechecked against an active branch in the same organization.
+- Member codes are generated in the format `MBR-000001` using organization-row locking and a transaction.
+- Member creation and `MEMBER_REGISTERED` audit insertion share the same database transaction.
+- Audit details include safe metadata such as member code, status, branch, admission-fee details, NIC type and last four only; the plaintext NIC and encrypted bytes are not written to the audit description.
+- Member status is initially `active`.
+- Admission fee status is `pending` when a positive fee is entered, `waived` when explicitly waived, and `not_charged` for a zero fee. The registration endpoint does not mark a fee as paid; actual payment must be recorded by a future payment workflow.
+- The registration response masks NIC and contact phone values.
+
+Date-of-birth behavior:
+
+- If the NIC produces one valid candidate date and no manual DOB is entered, that date is used with source `nic_decoded`.
+- If an old NIC has multiple possible centuries, the API returns `MEMBER_DOB_CENTURY_CONFIRMATION_REQUIRED` with the candidate dates; the client must send the selected DOB and `date_of_birth_confirmed: true`.
+- A manually supplied DOB that differs from the decoded NIC DOB requires explicit confirmation; it is stored with source `manual`.
+- This decoding process is not an identity-verification service.
+
+**Validation completed so far:**
+
+- JavaScript syntax checks passed for the identity service, member search controller, member registration controller, member routes and `server.js`.
+- Module load checks passed for both controllers and the route module.
+- Old/new NIC shape checks, sample DOB decode checks, ambiguous-century handling, phone normalization, AES-256-GCM encrypt/decrypt and HMAC output checks passed.
+- Database verification found the `members` table and `members.create` Gym permission.
+- `GET /api/health` was run against the office API and returned `success: true`, API connected and database connected.
+- An unauthenticated request to `GET /api/members/search?q=test` returned HTTP 401 as expected, confirming the route is protected by authentication middleware.
+
+**Not yet verified:** no authenticated POST registration request has been run against the live API. Duplicate-NIC behavior, member-code generation under concurrent requests, active/preferred branch enforcement, audit insertion, and returned member profile must be tested with an authenticated session before declaring the registration workflow operational. No live member has been registered as part of this checkpoint.
+
+### 35.6 API and Gym App release contents — pushed to GitHub
+
+The user staged only the reviewed source paths in each repository. No `.env` files were staged.
+
+API commit:
+
+```text
+cb9f3c2 Add trainer and member management APIs
+```
+
+Remote update:
+
+```text
+97467a2..cb9f3c2  main -> main
+```
+
+Gym App commit:
+
+```text
+3234be1 Add trainer management and branch-aware staff UI
+```
+
+Remote update:
+
+```text
+2b85743..3234be1  main -> main
+```
+
+After both pushes, the user ran `git status` in both repositories. Both reported `main`, up to date with `origin/main`, and a clean working tree. No new Gym App Member UI was included in this push; the Member Search/Registration backend code is in the API repository only.
+
+### 35.7 Current next steps — resume development on the office laptop
+
+1. **Keep the office laptop as the source of truth.** Do not request home-laptop pull/sync or ask the user to modify the home laptop; the user explicitly said no home work was performed and they have returned to the office.
+2. **Run an authenticated Member Registration integration test** using the existing Flutter Gym Staff session/device token or an existing authorized API test method. Use a clearly synthetic NIC for test data; do not ask the user to paste a real NIC into chat. Confirm the POST response, member row, masked response and transactionally committed audit record.
+3. **Test duplicate prevention** by submitting the same synthetic NIC twice in the same organization. Confirm the second request returns HTTP 409 with `MEMBER_NIC_ALREADY_REGISTERED` or the database duplicate conflict code and creates no second member/audit row.
+4. **Test organization isolation and branch context.** Try an accessible preferred branch, an inaccessible branch and an inactive branch where test data is available. Confirm registration always uses the active session branch, never a client-provided registration branch.
+5. **Review API edge cases before production use.** In particular validate input normalization, old-NIC date candidates, invalid day-of-year values, no-NIC policy, and transaction/audit rollback when audit insertion fails. NIC values must never appear in logs or error output.
+6. **Build Flutter Member Search and Registration UI** after the authenticated API tests. The intended reception workflow is search existing member by name/mobile/exact NIC, display at most five masked results including inactive records, open an existing profile when found, and only offer new registration when no existing record is selected.
+7. Continue member profile updates/status, profile photo, fitness progress history and progress photos. Enrolment, admission-fee payment, membership/program subscription, invoices, payments, receipts, QR card and WhatsApp sharing remain separate later workflows.
+
+### 35.8 Updated handover and GitHub documentation status
+
+This file is the updated master handover dated 18 November 2026. The API and Gym App repositories have already received their code commits listed in Section 35.6. The updated `.md` itself still needs to be copied into the office `gym_management_super_admin` repository, staged as a documentation-only change, committed and pushed to `origin/main` after inspecting the current Super Admin repository status and existing master-document filename. Do not mix unrelated Super Admin source changes into this documentation commit, and do not use `git add .`.
+
+---
+
+**End of current authoritative master handover document (18 November 2026).**
