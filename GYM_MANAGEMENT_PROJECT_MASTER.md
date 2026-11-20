@@ -1,9 +1,9 @@
 # GYM MANAGEMENT PROJECT MASTER
 
 **Technical handover and continuation reference**
-**Last updated:** 18 November 2026 (office checkpoint: API and Gym App member-management changes pushed to GitHub; Member Fitness API branch-scope correction included; Member Detail UI integration and Member Profile cross-branch authorization follow-ups recorded in Section 36)
+**Last updated:** 20 November 2026 (Billing ledger foundation and standalone Payments navigation checkpoint; Payments & Collections redesign requirements and plan-based collections API work recorded in Section 37)
 **Project owner / development context:** Innovex Fitness Center / Innovex Web Solutions
-**Primary development environment:** Office Windows laptop, PowerShell, Flutter, Node.js and MySQL 8. Current office-laptop project paths and GitHub release state are recorded in Sections 31 and 35. The office laptop is the active workstation for this continuation; no home-laptop changes were made as part of the 18 November checkpoint.
+**Primary development environment:** Windows, PowerShell, Flutter, Node.js and MySQL 8. The active PowerShell project paths explicitly confirmed during the 20 November continuation are `D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_api` and `D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_app`. Earlier office-laptop paths and GitHub release checkpoints in Sections 31, 33 and 35 are historical records; verify the current machine, branch and working-tree state before any Git operation.
 
 > **Purpose.** This document is the durable technical handover for continuing the Gym Management project in a new ChatGPT conversation. It records decisions, source paths, database facts, endpoints, implementation state, debugging history and pending work. It deliberately distinguishes verified implementation from requirements that have only been discussed. Unknown schema details are identified as unknown rather than guessed.
 
@@ -27,7 +27,7 @@ The intended product scope includes:
 
 ### Current product boundary
 
-The platform-management foundation and the first operational Gym App modules are implemented in the office-laptop working copies. The Super Admin app/API include organization, device, license, initial Gym Owner provisioning, Gym Owner account editing and Platform Admin password reset. The Gym App/API now include device activation/validation, Gym Staff authentication and session handling, branch switching, a global active-branch selector, Staff Management with selected-branch filtering/refresh, branch/device/audit modules, Membership Plan and Fitness Program modules, and Trainer Management with profile-photo handling. The user has manually confirmed that active-branch switching and the Staff list refresh work together in the running app. Trainer API/UI and photo upload code have passed the recorded syntax/analyzer/storage checks; see Section 34 for the exact scope and qualifications. The Flutter Role & Permission management UI is still pending even though the Gym Role API and permission-scope migration exist. Member Management, attendance, membership enrolment/billing, payments/refunds, reports and member fitness-progress history are not confirmed complete. A module being present must not be treated as proof that every business rule or error path is production-tested.
+The platform-management foundation and the first operational Gym App modules are implemented in the project working copies. The Super Admin app/API include organization, device, license, initial Gym Owner provisioning, Gym Owner account editing and Platform Admin password reset. The Gym App/API include device activation/validation, Gym Staff authentication and session handling, branch switching, a global active-branch selector, Staff Management, branch/device/audit modules, Membership Plan and Fitness Program modules, Trainer Management, Member Management/search/registration foundations, and the Member Fitness API. The Member Fitness API branch-scope correction was included in the 18 November checkpoint; see Sections 35–36 for qualification and outstanding profile-scope/UI work. A billing ledger foundation for membership invoices, payments, refunds and waivers is now implemented at the API level, and the Flutter app has a standalone Payments navigation screen that is visible in the running app. However, the requested Payments & Collections dashboard redesign, global financial summary cards, automatic member type-ahead search, plan-based member collections report and its secure aggregate API are still pending as of 20 November; see Section 37. The removal of the old Billing & Payments entry from inside Membership has not yet been re-verified against the current source. The Flutter Role & Permission management UI and the Member Detail/Fitness UI follow-ups recorded in Section 36 must not be considered complete without fresh source and runtime evidence. A module being present must not be treated as proof that every business rule or error path is production-tested.
 
 The original design considered an organization/tenant with multiple branches. The user later said full multi-tenant complexity could be deferred initially while branch-wise operations remained necessary. The implemented platform layer nevertheless has an `organizations` boundary, organization-owned branches, licenses and devices. The current state is therefore organization-scoped at the platform/device/license level; do not assume all future operational data APIs are already tenant-isolated.
 
@@ -997,8 +997,7 @@ This was an earlier Java activity-level implementation/prototype. It is not evid
 
 Confirmed requirement examples:
 
-- Time-bound fitness programs such as a **60-day weight-loss program**.
-- Members should be enrolled in programs.
+- Time-bound fitness programs such as a **60-day weight-loss program**.- Members should be enrolled in programs.
 - Program duration, enrollment dates, program status, and member results should be managed.
 
 No final program tables, APIs, Flutter screens or complete enrollment workflows were confirmed in the current conversation. Do not claim these are implemented.
@@ -1998,7 +1997,6 @@ The Fitness Mania organization shown during the UI verification had no branches 
 ### 30.3 Gym Owner account lookup API
 
 The broad onboarding-report endpoint and its UI (permissions, branches, branch access and onboarding history) were removed from the Edit Organization workflow. The focused read endpoint is:
-
 | Method | Endpoint | Required Platform Admin permission | Response data |
 |---|---|---|---|
 | GET | `/api/organizations/:organizationId/gym-owner` | `organizations.view` | Gym Owner ID, name and login email; no password fields |
@@ -2997,7 +2995,6 @@ Backend change in `src/controllers/gymStaffController.js`:
 - The selected branch is not accepted from an arbitrary client-supplied `branch_id` parameter as a substitute for the authenticated session.
 
 Flutter change in `lib/features/staff/presentation/staff_management_screen.dart`:
-
 - `StaffManagementScreen` now receives `activeBranchId` from the authenticated parent screen.
 - `didUpdateWidget` detects an active-branch change, resets the page to page 1, clears the expanded staff row/card and reloads the staff list.
 - The active branch property is a UI refresh trigger. The actual API branch scope is still derived by the backend from the current Gym Staff JWT.
@@ -3652,4 +3649,203 @@ This Section 36 is the latest member-management continuation record. The API and
 
 ---
 
-**End of current authoritative master handover document (18 November 2026, Section 36).**
+## 37. Current Authoritative Checkpoint — Billing Ledger and Standalone Payments Module (20 November 2026)
+
+This is the newest continuation checkpoint. It supplements and supersedes earlier status statements only where they conflict with the facts below. Sections 1–36 remain as historical design, implementation and debugging records. Do not delete or silently rewrite historical checkpoints. The user asked for the Payments & Collections experience to be completed in the next work stage; the redesign requirements in this section are approved product requirements, not yet implemented features.
+
+### 37.1 Active working paths and runtime evidence
+
+The user’s PowerShell prompt during this continuation explicitly showed the Gym App working directory:
+
+```text
+D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_app
+```
+
+The corresponding API project path used for this project is:
+
+```text
+D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_api
+```
+
+Do not substitute the older office-laptop `C:\Users\Pradeep\Documents\...` paths from Sections 31–36 when giving commands for this continuation. The current prompt is the best evidence of the active path. The Super Admin project path and current Git branch/commit state were not reconfirmed in this 20 November session.
+
+Flutter version previously confirmed for the Gym App: Flutter 3.47.7 stable. The user resolved the earlier Gradle dependency DNS issue. A subsequent `flutter run` built `app-debug.apk`, installed it and synchronized to the Pixel Tablet emulator. This confirms that the app could build/install at that checkpoint; it does not replace a fresh `flutter analyze` or verification after the latest Payments changes.
+
+### 37.2 Membership billing ledger — implementation foundation
+
+The API billing foundation has been implemented for membership invoices, payments, refunds and waivers. The following endpoint shapes were recorded from the implementation work:
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/api/members/:memberId/memberships/:membershipId/invoices` | List invoices for the selected member membership |
+| POST | `/api/members/:memberId/memberships/:membershipId/invoices` | Create an invoice using the membership’s saved price snapshot; request fields are `due_date` and `notes` (optional) |
+| POST | `/api/members/:memberId/memberships/:membershipId/invoices/:invoiceId/payments` | Receive a payment |
+| POST | `/api/members/:memberId/memberships/:membershipId/invoices/:invoiceId/refunds` | Record a refund |
+| POST | `/api/members/:memberId/memberships/:membershipId/invoices/:invoiceId/waivers` | Record an eligible invoice waiver |
+
+Recorded request payload contracts:
+
+- Payment: `{ amount, payment_method, payment_reference?, notes?, idempotency_key }`.
+- Refund: `{ refund_amount, refund_method, refund_reference?, reason, notes?, idempotency_key }`.
+- Waiver: `{ waiver_amount, reason, notes?, idempotency_key }`.
+- Invoice creation does not accept a client-calculated total; the invoice amount comes from the membership price snapshot.
+- Idempotency keys are UUIDs.
+- The authenticated staff/device context supplies organization, actor and active-branch identity. Do not accept client-supplied organization/user/branch identity as authoritative.
+
+Payment methods recorded in the implementation include `cash`, `card`, `bank_transfer`, `cheque`, `mobile_wallet`, `online` and `other`. Refund methods include `original_method`, `cash`, `bank_transfer` and `other`.
+
+Ledger/business rules already established:
+
+- Financial actions are separate invoice/payment/refund/waiver records; do not rewrite historical posted ledger entries to make a balance look correct.
+- `posted` records affect balances. A `voided` transaction reverses its financial effect while preserving the history.
+- Net paid is posted payments less posted refunds. Posted waivers reduce the remaining amount due.
+- Invoice totals come from the membership price snapshot, not the current membership-plan price. A later plan price change must not rewrite historical invoice/member pricing.
+- An unpaid invoice does not automatically suspend a membership.
+- Invoice-period generation respects the membership’s next billing date and suspensions.
+- A waiver is only allowed for an eligible overdue/unpaid residual invoice and requires a reason. It must not change membership start/end dates.
+- Do not send arbitrary `organization_id`, `user_id`, `created_by`, or `branch_id` from the Flutter app. The API must derive identity from authenticated middleware and use the active staff branch for transaction/audit context.
+
+The backend foundation should not be described as fully production-verified end-to-end until the outstanding route/permission/transaction scenarios have been tested against the current source and schema. Do not create extra transactions just to test the UI; the existing financial fixture below should be preserved.
+
+### 37.3 Existing financial test fixture — preserve without mutation
+
+The following known database fixture was used when checking billing calculations:
+
+| Record | Known value |
+|---|---|
+| Organization | `3` |
+| Member | `2` |
+| Membership | `2` |
+| Invoice | `1` — `INV-2026-000001` |
+| Invoice total | LKR 3,800 |
+| Posted payment | LKR 1,000 |
+| Posted refund | LKR 100 |
+| Earlier refund | LKR 400 — `voided` |
+| Net paid | LKR 900 |
+| Outstanding | LKR 2,900 |
+
+**Do not void, delete, edit or otherwise mutate these records unless the user explicitly requests it.** The voided LKR 400 refund remains part of the audit/history and must not be counted as an active refund. This fixture is sufficient for read-only arithmetic verification of the net-paid/outstanding calculation; do not manufacture a second payment or refund as a screen test.
+
+### 37.4 Membership Plan API route contract currently supplied
+
+On 20 November the user supplied the current `src/routes/membershipPlanRoutes.js` contents. The route file:
+
+- Applies `authenticateDevice` and `authenticateGymStaff` with `router.use(...)` before every membership-plan endpoint.
+- `GET /` and `GET /:planId` require `membership_plans.view`.
+- `POST /` requires `membership_plans.create`.
+- `PATCH /:planId` requires `membership_plans.update`.
+- `POST /:planId/deactivate` requires `membership_plans.deactivate`.
+- `POST /:planId/reactivate` requires `membership_plans.update`.
+- Exports the Express router.
+
+This is the existing membership-plan CRUD route contract. The supplied router does **not** expose a plan-based collection report or aggregate financial summary endpoint. The exact membership-plan controller SQL, invoice/payment/refund/waiver table DDL and current membership status enum must be inspected before adding aggregate queries; do not invent column names or infer a response shape from the route file alone.
+
+When a static one-segment route such as `/collections` is added to this router, place it before `/:planId`; otherwise Express can interpret the word `collections` as the `planId` for the existing single-segment route. The new collection route must have a dedicated financial permission check and organization scoping, not merely rely on the Flutter UI hiding controls.
+
+### 37.5 Current Flutter Payments navigation and screen state
+
+The following current Gym App files/modules were observed in the user’s terminal diagnostics and prior source inspection:
+
+```text
+lib/features/payments/presentation/payments_screen.dart
+lib/features/members/presentation/member_membership_billing_screen.dart
+lib/features/members/presentation/member_membership_screen.dart
+lib/features/members/data/member_membership_service.dart
+lib/features/auth/presentation/gym_authenticated_screen.dart
+```
+
+Current implementation facts:
+
+- `gym_authenticated_screen.dart` contains a Dashboard sidebar item and Quick Access item with section ID `payments`, conditionally exposed through `_canAccessPayments`.
+- `_buildModulePage()` returns `PaymentsScreen` when `_selectedSection == 'payments'` and passes member, membership and billing permission flags.
+- The standalone `PaymentsScreen` exists, is connected to the Dashboard route and was visibly rendered on the Pixel Tablet screenshot after the layout troubleshooting. The screenshot showed the “PAYMENTS & COLLECTIONS” heading, a member search field and an instruction message. The remaining large unused area is a UI problem, not proof that the route is missing.
+- `PaymentsScreen` uses the existing `MemberMembershipService.searchMembers(query)` and `listMemberships(memberId, page: 1, pageSize: 100)` methods. The existing search method rejects queries shorter than two characters and is called by the search button or keyboard submit; it does not yet automatically query as each character is typed.
+- Selecting a member loads that member’s memberships. Selecting a membership opens `MemberMembershipBillingScreen` for invoice/payment/refund/waiver operations.
+- The current standalone screen is a first integration screen, not the approved final Payments & Collections dashboard described in Section 37.6.
+- The most recent source diagnostic of the Membership screen showed a `MemberMembershipBillingScreen` import and a “Billing & Payments” button inside membership cards. A patch was provided to remove this embedded billing entry, but no later source excerpt confirmed that the deletion was applied. Reinspect the current file before claiming the Membership screen is billing-free. The intended boundary is: Membership manages membership assignment/update/cancel/renew; all invoice/payment/refund/waiver work lives under the Dashboard Payments item.
+
+### 37.6 Approved Payments & Collections screen requirements — implementation pending
+
+The user supplied a screenshot of the running Payments screen and requested a more useful layout with less empty space. The following requirements were explicitly approved on 20 November:
+
+#### A. Compact financial summary cards
+
+Place four compact cards at the top of the Payments page, above the member search field:
+
+1. Active memberships.
+2. Total billed.
+3. Total collected.
+4. Outstanding balance.
+
+The cards should be small and information-dense, not large dashboard panels. Currency display is LKR for this product. Summary values must be returned by a secure server-side aggregate and calculated from the actual invoice/payment/refund/waiver ledger, not from multiplying plan price by member count or treating every membership fee as paid.
+
+#### B. Automatic member type-ahead search
+
+- Keep a member search field for name, member code or phone.
+- Search automatically as the user types, using a short debounce to avoid one API request per keystroke.
+- Retain the existing two-character minimum unless the API contract is deliberately changed.
+- Show matching member results without requiring the user to press the search icon or submit from the keyboard.
+- After a member is selected, load that member’s membership list.
+- In this Payments member-selection flow, do not show memberships whose status is `cancelled` or `suspended`. Preserve the exact status rules from the API/database; do not add other exclusions such as `expired` or `scheduled` without confirming their intended behavior from the schema and business rules.
+
+#### C. Membership-plan collection selector and paginated member list
+
+Add one prominent membership-plan combo/dropdown to the main Payments page. Load plans through the existing Membership Plan API. When the user selects a plan, load all members in the authenticated organization who are currently using that selected plan.
+
+Show the plan collection results as a compact paginated list/table, not oversized cards. Each member row must include:
+
+- Member name and member code.
+- Membership plan and configured billing interval (monthly, yearly, daily or the actual interval configured for the plan; do not hard-code only monthly/yearly).
+- The member’s saved membership fee/price snapshot.
+- Total invoiced/billed.
+- Net paid (posted payments minus posted refunds).
+- Outstanding balance after posted payments, posted refunds and posted waivers.
+- Relevant due date: show the due date from the outstanding invoice. If there is no outstanding invoice but the membership has a valid next billing date, show that date; otherwise show `—` rather than inventing a date.
+
+Pagination is required so the app does not download every member/financial record to Flutter. The API must return page metadata and accurate page-independent aggregate values as appropriate.
+
+#### D. Tenant, branch and permission rules
+
+- Collection results are organization-wide for the authenticated organization unless a later explicit branch filter is approved. Do not restrict a member to their `registration_branch_id`; that field is informational and is not an access-control boundary.
+- Resolve organization and staff identity from the authenticated device/Gym Staff session, not query/body parameters supplied by Flutter.
+- Keep cross-organization isolation strict.
+- Use the authenticated staff active branch for branch context on any newly created invoice/payment/refund/waiver and for audit events. Do not derive the financial report's member scope from the active branch.
+- The new summary/collection endpoints must enforce appropriate financial dashboard/view permission(s) server-side. Membership-plan reads and member reads must also respect their existing permission requirements. `_canAccessPayments` and client-side `can...` flags are UI visibility only; they are not a substitute for backend authorization.
+
+### 37.7 Financial calculation rules for the new collection report
+
+The backend report must aggregate from ledger entries with the same rules used by the invoice detail screen and existing billing calculations:
+
+- Billed total: sum the relevant invoice totals for the selected member/membership/plan and report period (the report period/filter design must be checked against the existing API/schema before implementation; do not silently add a date filter the user did not request).
+- Net paid: posted payment amounts minus posted refund amounts. Voided payments/refunds do not affect the current balance but remain in history.
+- Waived amount: only posted waivers count toward reducing the amount outstanding.
+- Outstanding: invoiced amount minus net paid minus posted waivers. Handle overpayment/credit consistently with the existing billing service; do not silently discard a credit or create a negative amount without a defined UI label.
+- Fee displayed per member: use the saved membership price snapshot, not the latest plan catalogue price.
+- Due date: use an actual unpaid invoice due date; fall back to the membership’s next billing date only when the schema/API exposes it and no outstanding invoice due date exists.
+
+Ensure joins do not multiply invoice totals when a member has multiple payments/refunds/waivers. Prefer pre-aggregated subqueries/CTEs or a carefully grouped query. Pagination must occur after the member result set is built, while the summary totals must not accidentally be limited to the current page.
+
+### 37.8 Implementation plan for the next continuation
+
+Resume from the D: project paths shown in Section 37.1, but first confirm both repositories’ current branch, `git status` and uncommitted work. Do not assume all changes are pushed.
+
+1. **Inspect exact current source and schema before coding.** Required API files: `src/routes/membershipPlanRoutes.js` (provided in chat), `src/controllers/membershipPlanController.js`, the actual billing routes/controllers/services, invoice/payment/refund/waiver table DDL and membership table/plan DDL. Required Flutter files: `payments_screen.dart`, `member_membership_billing_screen.dart`, `member_membership_screen.dart`, `member_membership_service.dart`, and `gym_authenticated_screen.dart`. The user has supplied only the membership-plan route source in this continuation; the controller and current payment screen source are not yet in this chat.
+2. **Implement server-side summary and plan collections.** Add the correctly permissioned route(s), organization-scoped SQL aggregation, status rules, due-date logic and pagination. Place static collection paths before `/:planId` if they share the same router. Return only the fields required by the UI plus pagination/summary metadata.
+3. **Build the Payments & Collections UI.** Add four compact KPI cards, debounced automatic member search, selected-member active membership list (excluding cancelled/suspended), one membership-plan selector and a compact paginated plan-collections list with all financial columns.
+4. **Remove billing from Membership.** Ensure membership assignment/update/cancel/renew remains in the Membership module and remove the old embedded `Billing & Payments` button and its unused screen import/launcher after checking current source. The Dashboard Payments route becomes the only billing entry point.
+5. **Address the prior runtime issues in the billing screen.** Earlier logs showed an ExpansionTile/ListTile background/ink visibility warning and `TextEditingController was used after being disposed`, followed by Flutter framework assertions (`_dependents.isEmpty` / dirty widget in wrong build scope). A safe replacement for the prompt dialog controller lifecycle and a Material-backed invoice card was prepared, but successful application and runtime verification were not confirmed in this checkpoint. Reinspect current code and fix only if the issue remains.
+6. **Validate efficiently without mutating financial history.** Run `node --check` for changed API files, route/module loading, `git diff --check` and `flutter analyze`. Use read-only queries against the existing invoice fixture and open the Payments screen. Do not create additional posted payments/refunds/waivers or edit/void the protected fixture just to test UI rendering.
+7. **Review and release separately.** Review exact API and Flutter diffs, stage explicit paths only, and commit/push each repository independently. Do not use `git add .`, force-push, amend the earlier 18 November release, or claim a clean/pushed state without checking it.
+
+### 37.9 Known outstanding work not superseded by this checkpoint
+
+- Member Profile API cross-branch authorization correction and `GET /:memberId` permission correction remain unconfirmed from Section 36.5; verify before marking complete.
+- Member Detail Flutter UI and the four-tab Overview/Fitness/Membership/Programs integration remain pending as recorded in Section 36.7.
+- Flutter Role & Permission UI and comprehensive API authorization/audit verification remain open from Section 33 unless later source/test evidence is provided.
+- The new plan-based collections API and redesigned Payments & Collections UI are not implemented yet; this is the immediate next feature task.
+- The embedded Membership “Billing & Payments” entry removal must be verified in current source.
+- GitHub push state for the 20 November billing/UI changes has not been confirmed in this continuation. Treat local source and remote release state as separate until checked.
+
+---
+
+**End of current authoritative master handover document (20 November 2026, Section 37).**
