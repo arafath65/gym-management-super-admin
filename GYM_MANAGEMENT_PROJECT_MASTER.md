@@ -1,7 +1,7 @@
 # GYM MANAGEMENT PROJECT MASTER
 
 **Technical handover and continuation reference**
-**Last updated:** 23 November 2026 (Program Billing, installment/void lifecycle fixes and Program Assignments PDF update confirmed; Section 40)
+**Last updated:** 23 November 2026 (Dashboard API, branch-aware reporting, permission-gated metrics, monthly membership targets and live Flutter Dashboard integration confirmed; Section 41)
 **Project owner / development context:** Innovex Fitness Center / Innovex Web Solutions
 **Primary development environment:** Windows, PowerShell, Flutter, Node.js and MySQL 8. The active PowerShell project paths explicitly confirmed during the 20 November continuation are `D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_api` and `D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_app`. Earlier office-laptop paths and GitHub release checkpoints in Sections 31, 33 and 35 are historical records; verify the current machine, branch and working-tree state before any Git operation.
 
@@ -4703,3 +4703,223 @@ Do not stage `.patch-backups/`, local archives, `.env`, secrets, local DB dumps 
 4. Record the exact source commits and remote main SHAs only after those source releases actually complete.
 
 **End of current authoritative master handover document (23 November 2026, Section 40).**
+
+---
+
+## 41. Dashboard API and Flutter Dashboard Integration — 23 November 2026
+
+### 41.1 Scope and completion status
+
+The operational Gym App Dashboard has now been connected to live backend data through a single dashboard-summary endpoint. The user confirmed that the integrated dashboard is working in the Flutter app on 23 November 2026.
+
+This milestone covers the API summary, branch-aware reporting, permission-aware metric visibility, monthly membership targets, collection calculations, and the Flutter dashboard integration. It is separate from the Payments & Collections screen and its Program Billing workflows documented in Sections 37–40.
+
+**Current status:** API implementation and migration completed; Flutter integration completed; Flutter static analysis passed with no issues; authenticated dashboard runtime was confirmed working by the user. Broader financial edge-case verification and source-code release checks remain separate tasks.
+
+### 41.2 Dashboard API files and routes
+
+API working-copy path:
+
+```text
+C:\Users\Pradeep\Documents\INNOVEX WEB\Flutter Projects\gym_management_api
+```
+
+Files created:
+
+- src/controllers/dashboardController.js
+- src/routes/dashboardRoutes.js
+- scripts/migrateDashboardMembershipTargets.js
+
+Existing file modified:
+
+- src/server.js — mounts the dashboard route family at /api/dashboard.
+
+Routes:
+
+| Method | Endpoint | Purpose | Authorization |
+|---|---|---|---|
+| GET | /api/dashboard/summary | Returns the selected reporting-period dashboard summary and metric visibility | Device authentication and Gym Staff authentication; each metric is independently permission-gated |
+| PUT | /api/dashboard/membership-target | Creates or updates a branch/month membership target | Device authentication, Gym Staff authentication and dashboard.membership_target.manage |
+
+The GET summary endpoint accepts a reporting branch scope and a month/year period. If the user does not supply a reporting branch, the active operational branch is used as the initial reporting scope. A reporting filter selection does not change the Gym Staff session or JWT active branch.
+
+The route family is mounted in the API server. Do not duplicate the mount or create a second dashboard route family without inspecting the current server and route files first.
+
+### 41.3 Branch scope and separation of operational/reporting branch
+
+The implementation preserves the project rule that operational branch switching and dashboard reporting scope are separate concerns:
+
+1. The top-bar branch selector is the operational branch switcher. It changes the Gym Staff session's active branch and is the branch context used by operational workflows.
+2. The Dashboard reporting selector independently chooses either one authorized branch or All Authorized Branches.
+3. Changing only the Dashboard reporting selector does not change the active operational branch, staff session or JWT.
+4. All Authorized Branches aggregates only branches that the authenticated staff member is authorized to view. It must never expose another branch merely because it belongs to the same organization.
+5. When the user changes the operational active branch, the Dashboard reloads using the new active branch as its initial reporting selection. The report filter remains a separate control and can be changed again independently.
+6. Membership target management is branch-specific. A target is not editable from an all-branches aggregate view.
+
+The API validates the requested branch against the authenticated Gym Staff branch authorization data and validates the active operational branch. It does not trust an arbitrary branch ID supplied by Flutter.
+
+### 41.4 Monthly membership target storage and permission
+
+The migration script creates the dedicated table:
+
+- dashboard_membership_targets
+
+The target is identified by organization, branch and calendar month. The month is stored as the first day of the target month. The table includes the target count, optional notes, audit user references and timestamps. It has a unique organization/branch/month key, organization/branch and user foreign-key relationships, and an organization/month lookup index.
+
+Migration behavior:
+
+- Creates the target table if it does not exist.
+- Adds the permission key dashboard.membership_target.manage.
+- Assigns the new permission to existing system Gym Admin roles.
+- Does not automatically add the permission to custom roles.
+- Does not change membership, attendance or billing ledger tables.
+
+The migration was run successfully in the development database.
+
+Target writes are protected by dashboard.membership_target.manage. The Flutter target-edit action is shown only to a user with this permission and a single selected branch. The target is not editable from the all-authorized-branches view.
+
+### 41.5 Metric definitions and financial calculation rules
+
+The dashboard uses the existing operational and financial ledgers. It must not introduce competing totals or infer posted financial events from draft or unpaid records.
+
+| Dashboard area | Authoritative source and calculation |
+|---|---|
+| Memberships this month | Counts rows created in the selected month in member_memberships. Each membership row counts once, including renewals. This is a membership-record count, not a distinct-person count. |
+| Memberships by Status | Uses the actual membership statuses: active, suspended, expired and cancelled. |
+| Monthly membership target | Reads the target for the selected organization, branch and calendar month. Branch targets are aggregated only across the branches in the authorized report scope. |
+| Today's Attendance | Counts attendance/check-in records using the actual attendance branch stored on each attendance record. |
+| Membership Collections | Uses posted membership payments less posted refunds, grouped by the actual transaction branch and currency. |
+| Program Collections | Uses the separate posted program-payment ledger. The current schema has no program refund ledger, so this amount is not represented as refund-adjusted. |
+| Expected Collections | Uses the membership invoice ledger and selected-month due dates, deducting allocated payments, refunds and waivers as applicable. |
+| Outstanding Collections | Uses invoice-ledger outstanding balances; it does not infer outstanding amounts from membership plan prices. |
+| Overdue Members | Uses overdue invoice-ledger balances and reports the overdue member count and outstanding amounts by currency. |
+
+Financial figures are grouped by currency. Amounts in different currencies must not be added together into a misleading single total. The backend converts monetary values to integer minor units for calculation and returns currency-specific amounts.
+
+Membership registrations and attendance retain the separate branch rules established earlier in this document: a member's registration branch is historical/reporting information and does not restrict organization-wide member access; each attendance event records the actual branch where it occurred.
+
+### 41.6 Per-metric permissions and privacy behavior
+
+The GET endpoint does not rely on one global Dashboard permission. It gates each metric independently:
+
+| Dashboard data | Required permission |
+|---|---|
+| Membership records, statuses and target data | member_memberships.view |
+| Attendance | attendance.view |
+| Membership collections | member_billing.dashboard.collected_collection.view |
+| Expected collections | member_billing.dashboard.expected_collection.view |
+| Outstanding collections | member_billing.dashboard.outstanding_collection.view |
+| Overdue members | member_billing.dashboard.overdue_members.view |
+| Membership target create/update | dashboard.membership_target.manage |
+| Program collections | member_program_billing.payments.view |
+
+When a user lacks a metric permission, the API skips the corresponding protected data query and returns an empty/zero-safe metric shape with the corresponding metric_visibility flag set to false. A permitted metric with a real zero value remains distinguishable from a metric the user is not authorized to view.
+
+The target-management permission is separate from the permission to view membership information. Existing system Gym Admin roles received the new target-management permission through the migration; custom role assignments must be reviewed deliberately.
+
+### 41.7 Audit behavior and period validation
+
+The summary GET operation writes a Dashboard-view audit entry transactionally. The recorded context includes the active operational branch, requested reporting scope, reporting month/year and metric visibility. The target update also writes an audit entry in the same transaction as the target mutation.
+
+The API validates the requested month and year together. A deliberately mismatched request using month 2026-01 with year 2025 returned HTTP 400 with error code DASHBOARD_PERIOD_YEAR_MISMATCH.
+
+A SQL parsing issue occurred during initial runtime testing because the date expression alias current_date conflicted with MySQL parsing in that query. The alias was changed to today_date and the JavaScript result reference was updated accordingly. The corrected API then returned valid dashboard summaries.
+
+### 41.8 Flutter Dashboard integration
+
+Gym App working-copy path:
+
+```text
+C:\Users\Pradeep\Documents\INNOVEX WEB\Flutter Projects\gym_management_app
+```
+
+Main integration file:
+
+- lib/features/auth/presentation/gym_authenticated_screen.dart
+
+The dashboard now uses the existing GymApiClient and its authenticated session handling. The app obtains the existing stored Gym Staff session and activated-device token through the established client/service flow; credentials and tokens must remain in secure storage and must not be copied into documentation, logs or chat.
+
+The Flutter Dashboard calls the single summary endpoint:
+
+- GET dashboard/summary
+
+The integration includes:
+
+- Live dashboard response state and loading indicator.
+- API error state and retry/reload behavior.
+- Reporting month/year and selected reporting branch request parameters.
+- Reporting branch selection for one authorized branch or All Authorized Branches.
+- A separate reporting selector that does not directly alter the operational active branch.
+- Request sequencing protection so an older asynchronous response cannot overwrite a newer reporting selection.
+- Metric parsing and currency formatting.
+- Permission-aware metric visibility.
+- A branch/month membership target editor using PUT dashboard/membership-target.
+- Membership status visualization using active, suspended, expired and cancelled counts.
+- Live attendance count in the activity area.
+- Live collection, expected, outstanding and overdue metric displays.
+- Removal of the temporary dashboard API diagnostic/test panel after integration.
+
+The integrated metric areas include membership records, memberships this month, today's attendance, membership collections, program collections, expected collections, outstanding collections and overdue members. The membership status breakdown is shown as a real status report, not as placeholder data.
+
+The top-bar operational branch switch continues to update the active Gym Staff branch/session and triggers a dashboard refresh. The report selector remains a separate reporting control.
+
+### 41.9 Development test evidence
+
+The API was tested through the authenticated Flutter app session. The following development snapshot was returned during testing; these figures document that test dataset at that time and are not hard-coded expected values:
+
+| Test metric | Development result |
+|---|---:|
+| Authorized branches | 2 — Colombo and Nugegoda |
+| Selected/active branch during test | Colombo |
+| November membership records | 8 |
+| Membership statuses | Active 5; Suspended 1; Expired 0; Cancelled 2 |
+| Membership target configured at test time | 0 |
+| Today's attendance at test time | 0 |
+| Monthly membership collections | LKR 18,000 |
+| Monthly program collections | LKR 20,000 |
+| Expected collections | LKR 12,700 |
+| Outstanding collections | LKR 15,600 |
+| Overdue members | 3 |
+| All-authorized-branches membership records | 8 |
+
+The test sequence confirmed the active-branch response, the all-authorized-branches response and the invalid period rejection. The user subsequently reported that the integrated Dashboard was working in the app.
+
+Flutter analysis initially identified unused legacy chart helpers/period code and one BuildContext-across-async-gap warning. The cleanup removed the unused code and added the mounted check before using the context after the asynchronous dashboard load.
+
+**Final Flutter static-analysis result reported by the user:**
+
+```text
+No issues found! (ran in 17.0s)
+===== DASHBOARD ANALYSIS CLEAN =====
+```
+
+This is the confirmed analyzer result for the Dashboard integration cleanup. It is not a claim that every API financial edge case or every permission-denial combination has been exhaustively tested.
+
+### 41.10 Backups, working-tree boundaries and GitHub release status
+
+Dashboard source patches followed the established backup-before-edit and exact-anchor validation process. Timestamped backups were created for the API server route change and dashboard controller correction in the API .patch-backups folder. The Flutter integration and cleanup were also applied with a backup before source modification.
+
+Files changed for this milestone are limited to the dashboard API files listed in Section 41.2 and the Gym App integration file listed in Section 41.8, plus the migration script. Do not stage or commit .patch-backups, .env files, credentials, local databases, private member photographs or unrelated files.
+
+The master handover document is maintained in the root of the Super Admin repository:
+
+```text
+https://github.com/arafath65/gym-management-super-admin
+GYM_MANAGEMENT_PROJECT_MASTER.md
+```
+
+This Section 41 update is a documentation-only GitHub commit. It does not publish the Dashboard API or Gym App source changes. The API, Gym App and Super Admin repositories remain independent. Do not assume that a source-code change is released merely because this master document has been updated.
+
+Before publishing Dashboard source code, inspect the API and Gym App working trees independently, preserve the existing Program Billing changes and any other unrelated work, run Node syntax checks for the changed API files, run full Flutter analysis, and use a selective file list. Never use git add ., never force-push, and do not modify the Super Admin source as part of the Dashboard API/App release.
+
+### 41.11 Exact continuation checklist
+
+1. Test membership target creation and update using a Gym Admin account with dashboard.membership_target.manage; verify that a user without that permission cannot save a target.
+2. Confirm that the report selector can switch between Colombo, Nugegoda and All Authorized Branches without changing the top-bar operational active branch.
+3. Test metrics with roles that have some but not all Dashboard permissions. Verify that inaccessible metrics are hidden/empty and that their protected data queries are skipped.
+4. Reconcile membership collections, program collections, expected collections, outstanding collections and overdue members against the corresponding database ledgers for a known reporting period and branch.
+5. Exercise multi-currency data and verify that currency totals remain separate.
+6. Run fresh authenticated negative-permission tests and any remaining financial edge cases before describing the Dashboard as fully production-verified.
+7. Review the API and Gym App Git working trees separately and publish the Dashboard source changes only after the user explicitly requests that source release.
+
+**End of current authoritative master handover document (23 November 2026, Section 41).**
