@@ -4417,7 +4417,7 @@ Before staging the API and App:
 
 Do not use git add ., force-push, amend an existing release, reset unrelated work or stage backups, archives, secrets or local data.
 
-The Super Admin document is being updated as the canonical handover. Its own documentation commit must be recorded separately. The API and App working-copy changes were not yet confirmed pushed at this checkpoint.
+The Super Admin document is being updated as the canonical handover. Its own documentation commit must be recorded separately. The API and App source releases were subsequently confirmed on GitHub on 23 November 2026. The remote commit SHAs are recorded in Section 39.14 below.
 
 ### 39.13 Exact continuation point
 
@@ -4437,3 +4437,24 @@ Do not repeat the unified catalog, program pause/resume, Gym Profile or PDF impl
 ---
 
 **End of current authoritative master handover document (23 November 2026, Section 39).**
+
+
+### 39.14 Confirmed GitHub release — 23 November 2026
+
+The user reported that the combined local release procedure completed. The current GitHub main branch heads were then queried and confirmed for all three independent repositories:
+
+| Project | Repository | Commit message | Confirmed remote main SHA |
+|---|---|---|---|
+| Gym Management API | https://github.com/arafath65/gym-management-api | Implement unified plans, attendance billing and gym profile | a16ea6e5f0109790210b1cd5f7033b7574249c76 |
+| Gym Management App | https://github.com/arafath65/gym-management-apps | Add attendance, gym profile and collections PDF reports | 5841b72dfa084899682fd955d4153fcaa578b237 |
+| Gym Management Super Admin (documentation update) | https://github.com/arafath65/gym-management-super-admin | Update Gym Management master handover through Section 39 | cdd24389cb3ff8191c347fb5bbcaff619ba57f18 |
+
+Remote GitHub commit records confirmed these three SHAs as the respective main heads when checked. The Flutter App SHA was also explicitly supplied by the user. This confirms remote commits exist; local workstation synchronization after these pushes must still be refreshed by fetching origin/main when returning to the office.
+
+**Next workstation action:** fetch origin/main separately in the API and Flutter App folders, inspect branch divergence and working tree state, then continue development. Do not reset or overwrite local files. If a local tree has additional changes after the release, inspect and preserve them before any pull/merge/rebase decision.
+
+The Super Admin master document is already updated and committed. No additional Super Admin application code change was part of this release.
+
+---
+
+**End of current authoritative master handover document (23 November 2026, Section 39.14).**
