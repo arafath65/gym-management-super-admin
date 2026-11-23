@@ -5045,4 +5045,49 @@ Do not push the Super Admin source as part of this milestone. Its role here is t
 - API and Gym App source release to GitHub remains pending; inspect the latest local working-tree state and preserve Program Billing and Payments changes before committing.
 - When both source pushes are completed, append their commit SHAs and changed-file lists here.
 
+### 42.8 Exact local source inventory supplied for the two-project release — 23 November 2026
+
+The user supplied the current `git status --short --branch` output from both local working copies. Both reported `main...origin/main`, with no ahead/behind count displayed and all listed changes unstaged.
+
+**Gym App — `gym-management-apps`**
+
+Modified:
+- `lib/features/auth/presentation/gym_authenticated_screen.dart`
+- `lib/features/payments/data/payments_collections_pdf_service.dart`
+- `lib/features/payments/presentation/payments_screen.dart`
+- `lib/features/roles/presentation/roles_permissions_screen.dart`
+- `pubspec.lock`
+- `pubspec.yaml`
+
+Untracked source files:
+- `lib/features/payments/data/member_program_billing_service.dart`
+- `lib/features/payments/presentation/member_program_billing_dialog.dart`
+- `lib/features/payments/presentation/payments_collections_pdf_preview_screen.dart`
+
+Untracked backup directory:
+- `.patch-backups/` — explicitly excluded from the source release.
+
+**Gym API — `gym-management-api`**
+
+Modified:
+- `src/controllers/memberBillingCollectionsController.js`
+- `src/controllers/memberProgramController.js`
+- `src/routes/memberBillingRoutes.js`
+- `src/routes/memberProgramRoutes.js`
+- `src/server.js`
+
+Untracked source files:
+- `scripts/migrateDashboardMembershipTargets.js`
+- `scripts/migrateMemberProgramBilling.js`
+- `src/controllers/dashboardController.js`
+- `src/controllers/memberProgramBillingController.js`
+- `src/routes/dashboardRoutes.js`
+
+Untracked backup directory:
+- `.patch-backups/` — explicitly excluded from the source release.
+
+This file inventory is the exact working-tree status reported by the user. It is not itself proof that every listed source file passed an independent test. The Gym App full-project `flutter analyze` result was reported as `No issues found! (ran in 26.2s)` after the global branch selector patch. API JavaScript syntax checks and both source repository pushes must be performed from the local working copies.
+
+**Source release state at this checkpoint:** not yet committed or pushed. The user should run the coordinated local release commands, which stage only the exact source paths above, validate staged whitespace, commit each repository separately, and push each `main` branch. The local push command must not include either `.patch-backups/` directory or any secrets/local data. Record the actual resulting commit SHAs here only after the user supplies the successful command output.
+
 **End of current authoritative master handover document (23 November 2026, Section 42).**
