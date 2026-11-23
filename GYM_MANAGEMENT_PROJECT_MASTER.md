@@ -5090,4 +5090,115 @@ This file inventory is the exact working-tree status reported by the user. It is
 
 **Source release state at this checkpoint:** not yet committed or pushed. The user should run the coordinated local release commands, which stage only the exact source paths above, validate staged whitespace, commit each repository separately, and push each `main` branch. The local push command must not include either `.patch-backups/` directory or any secrets/local data. Record the actual resulting commit SHAs here only after the user supplies the successful command output.
 
-**End of current authoritative master handover document (23 November 2026, Section 42).**
+**End of Section 42 historical checkpoint (23 November 2026).**
+
+---
+
+## 43. API and Flutter Source Release — 23 November 2026
+
+### 43.1 Release confirmation
+
+The user ran the coordinated local release procedure and reported that both source repositories were committed and pushed successfully to their respective `main` branches.
+
+GitHub confirms the exact commits:
+
+| Repository | Commit | Commit message | GitHub |
+|---|---|---|---|
+| Gym API — `gym-management-api` | `0cf3b4d0c72350518e16016ef9e7f52f3ed8dcd3` | `feat(api): add dashboard and program billing` | https://github.com/arafath65/gym-management-api/commit/0cf3b4d0c72350518e16016ef9e7f52f3ed8dcd3 |
+| Gym App — `gym-management-apps` | `38a27c9bf444c7eae51038bb59a15259098e0419` | `feat(app): integrate dashboard branch scope and program billing` | https://github.com/arafath65/gym-management-apps/commit/38a27c9bf444c7eae51038bb59a15259098e0419 |
+
+A GitHub compare against the previously inspected remote `main` heads confirms each release commit is exactly one commit ahead and zero commits behind:
+
+| Repository | Previous main SHA | Release result |
+|---|---|---|
+| Gym API | `3f5a3780fab8f171438941f8579dc687097133c2` | `ahead`, 1 commit ahead, 0 behind |
+| Gym App | `5841b72dfa084899682fd955d4153fcaa578b237` | `ahead`, 1 commit ahead, 0 behind |
+
+The user supplied the following local release verification:
+
+```text
+========== RELEASE VERIFICATION ==========
+API commit: 0cf3b4d0c72350518e16016ef9e7f52f3ed8dcd3
+Flutter commit: 38a27c9bf444c7eae51038bb59a15259098e0419
+
+API status:
+## main...origin/main
+?? .patch-backups/
+
+Flutter status:
+## main...origin/main
+?? .patch-backups/
+
+BOTH SOURCE REPOSITORIES PUSHED SUCCESSFULLY.
+```
+
+The tracked working-tree changes were committed and pushed. The only remaining local untracked item shown in each repository is `.patch-backups/`; these backup folders were intentionally excluded from the commits. Preserve them until the corresponding local backups are no longer needed. Do not use `git add .` to include them.
+
+### 43.2 Exact Gym API release contents
+
+The GitHub commit comparison confirms these 10 files:
+
+**Added**
+- `scripts/migrateDashboardMembershipTargets.js`
+- `scripts/migrateMemberProgramBilling.js`
+- `src/controllers/dashboardController.js`
+- `src/controllers/memberProgramBillingController.js`
+- `src/routes/dashboardRoutes.js`
+
+**Modified**
+- `src/controllers/memberBillingCollectionsController.js`
+- `src/controllers/memberProgramController.js`
+- `src/routes/memberBillingRoutes.js`
+- `src/routes/memberProgramRoutes.js`
+- `src/server.js`
+
+This release includes the Dashboard summary/target API and the Program Billing API, migrations, route/controller integration, and related member billing/program changes.
+
+### 43.3 Exact Gym App release contents
+
+The GitHub commit comparison confirms these 9 files:
+
+**Added**
+- `lib/features/payments/data/member_program_billing_service.dart`
+- `lib/features/payments/presentation/member_program_billing_dialog.dart`
+- `lib/features/payments/presentation/payments_collections_pdf_preview_screen.dart`
+
+**Modified**
+- `lib/features/auth/presentation/gym_authenticated_screen.dart`
+- `lib/features/payments/data/payments_collections_pdf_service.dart`
+- `lib/features/payments/presentation/payments_screen.dart`
+- `lib/features/roles/presentation/roles_permissions_screen.dart`
+- `pubspec.lock`
+- `pubspec.yaml`
+
+This release includes the global Dashboard branch scope/All Branches integration, Program Billing UI and service, and Payments & Collections/PDF preview changes.
+
+### 43.4 Validation and release boundaries
+
+- The user previously reported successful formatting and full Flutter analysis after the global branch selector patch: `No issues found! (ran in 26.2s)`.
+- The coordinated release procedure included API JavaScript syntax checks, Flutter analysis and Git whitespace checks before staging/committing. The user reported that the procedure reached successful commits and pushes for both repositories.
+- The two migration scripts are now present in the API source repository. **Pushing the source code does not execute either migration against a database.** Before deploying the new API version to an environment that needs these schema changes, review and run the applicable migrations against that environment's database using the project's documented migration procedure.
+- Do not assume production deployment, database migration, or end-to-end production verification has happened merely because the GitHub pushes succeeded.
+
+### 43.5 Remaining runtime verification
+
+After deploying the matching API and App versions to a test environment:
+
+1. Verify the top-bar All Branches option changes Dashboard reporting scope only and does not change the Gym Staff operational branch/session.
+2. Verify selecting a real branch switches the operational session and refreshes the Dashboard for that branch.
+3. Verify Dashboard totals, membership targets, branch authorization and metric-level permission visibility against known database records.
+4. Verify Program Billing creation, payment handling, collection summaries and PDF preview/export against the intended business rules.
+5. Verify Payments & Collections behavior, including the updated PDF output, with representative real test records.
+6. Verify branch-scoped behavior for operational modules remains tied to the authenticated staff active branch.
+7. Complete production database backup, migration review, deployment and post-deployment checks before enabling the release for customer use.
+
+### 43.6 Current authoritative continuation point
+
+- Gym API source is pushed to `main` at `0cf3b4d0c72350518e16016ef9e7f52f3ed8dcd3`.
+- Gym App source is pushed to `main` at `38a27c9bf444c7eae51038bb59a15259098e0419`.
+- GitHub comparison confirms each repository is one commit ahead of its previous recorded `main` head and is not behind that base.
+- Each local working copy reported `main...origin/main`; only its untracked `.patch-backups/` directory remained.
+- Sections 42.5–42.8 record the earlier pre-release checkpoint. Their statements that the source release was pending are historical and are superseded by this Section 43.
+- Database migrations and environment deployment remain separate tasks. Runtime verification listed in Section 43.5 remains required.
+
+**End of current authoritative master handover document (23 November 2026, Section 43).**
