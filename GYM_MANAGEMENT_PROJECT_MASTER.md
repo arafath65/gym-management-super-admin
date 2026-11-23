@@ -1,7 +1,7 @@
 # GYM MANAGEMENT PROJECT MASTER
 
 **Technical handover and continuation reference**
-**Last updated:** 23 November 2026 (Unified plans/programs, attendance, Gym Profile and Payments PDF export checkpoint; Section 39)
+**Last updated:** 23 November 2026 (Program Billing, installment collections, dialog lifecycle follow-up and Payments PDF layout; Section 40)
 **Project owner / development context:** Innovex Fitness Center / Innovex Web Solutions
 **Primary development environment:** Windows, PowerShell, Flutter, Node.js and MySQL 8. The active PowerShell project paths explicitly confirmed during the 20 November continuation are `D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_api` and `D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_app`. Earlier office-laptop paths and GitHub release checkpoints in Sections 31, 33 and 35 are historical records; verify the current machine, branch and working-tree state before any Git operation.
 
@@ -4458,3 +4458,251 @@ The Super Admin master document is already updated and committed. No additional 
 ---
 
 **End of current authoritative master handover document (23 November 2026, Section 39.14).**
+
+
+## 40. Program Billing, Installment Collections and Payments PDF Follow-up — 23 November 2026
+
+This section records the Program Billing work completed after Section 39.14. It distinguishes successful migration/API/payment observations from follow-up Flutter lifecycle fixes and the PDF layout change that was requested but not yet confirmed as applied.
+
+### 40.1 Scope and product rules
+
+Program Billing is a separate financial ledger for a member's fitness-program assignment. It must not reuse or change membership invoice/payment balances.
+
+Confirmed rules carried into this implementation:
+
+- The program assignment stores a fee and currency snapshot when the member is assigned. Later catalog-price changes must not rewrite the existing assignment fee or invoice.
+- Creating a program assignment creates its program invoice in the same backend transaction.
+- Program invoices support full or partial installment payments until the outstanding amount reaches zero.
+- Overpayment is rejected by the API; a client-side amount check is only an additional user-experience check.
+- Every successful installment has its own receipt/payment number, payment date, method and optional reference/notes.
+- The receive endpoint accepts an idempotency key so a replay of the same request does not create a second payment.
+- Card collection additionally requires the existing `member_billing.payments.receive.card` permission.
+- A program may be paused while its invoice remains open. Pause does not cancel the invoice, reduce the outstanding amount or prevent collection of an installment.
+- Voiding an installment requires a reason and the dedicated `member_program_billing.payments.void` permission. The invoice's net paid and outstanding values must be recalculated from non-voided payments.
+- Program billing mutations use transactional database operations/locking and audit logging. The program ledger remains distinct from membership billing.
+
+### 40.2 Database migration — run successfully
+
+The Program Billing migration was executed successfully against the development database. The command output reported:
+
+| Migration result | Count / status |
+|---|---:|
+| Existing program assignments found | 1 |
+| Program invoices created | 1 |
+| Program payments created | 0 |
+| Existing membership billing tables | Not modified |
+
+The migration adds fee/currency snapshot information to `member_program_assignments` and creates these tables:
+
+- `member_program_invoices`
+- `member_program_payments`
+- `member_program_billing_sequences`
+
+The migration also seeds the four Program Billing permissions and registers the Member Program Billing module:
+
+- `member_program_billing.invoices.view`
+- `member_program_billing.payments.view`
+- `member_program_billing.payments.receive`
+- `member_program_billing.payments.void`
+
+The Gym Admin default-role permission synchronization includes the new keys. Custom roles are not automatically rewritten. The exact migration-script filename was not present in the command output recorded for this checkpoint; inspect the API `scripts/` directory rather than guessing its name.
+
+### 40.3 Backend API implementation
+
+Files changed or added in the API working copy:
+
+- `src/controllers/memberProgramController.js`
+- `src/routes/memberProgramRoutes.js`
+- `src/controllers/memberBillingCollectionsController.js`
+- `src/routes/memberBillingRoutes.js`
+- New: `src/controllers/memberProgramBillingController.js`
+
+Implementation recorded:
+
+1. The program catalog response exposes configured price, currency and whether a price is configured.
+2. Program assignment reads expose the fee snapshot fields.
+3. Program assignment creation stores the snapshot and creates its program invoice within the assignment transaction.
+4. Assignment audit metadata includes the captured price/currency and invoice number.
+5. The Program Billing controller reads the invoice and payment history, receives an installment and voids a payment.
+6. Payment writes use invoice locking/transaction handling, reject amounts above the outstanding balance, support an idempotency key and generate receipt numbers in the `PGP-<year>-<sequence>` format.
+7. Void requires a non-empty reason and a separate permission.
+8. The card-payment route has an additional middleware check for `member_billing.payments.receive.card`.
+9. The program assignment collections/report query returns the financial fields used by Flutter: `fee`, `currency_code`, `price_configured`, `invoice_id`, `invoice_number`, `total_billed`, `net_paid`, `outstanding` and `billing_state`, alongside member/program and assignment details.
+10. Program Billing routes are protected by the corresponding invoice/payment permissions.
+
+Program Billing endpoint shapes added under the member-program route family:
+
+| Method | Relative route | Purpose |
+|---|---|---|
+| GET | `members/:memberId/programs/:assignmentId/invoice` | Read assignment invoice |
+| GET | `members/:memberId/programs/:assignmentId/invoice/payments` | Read installment/receipt history |
+| POST | `members/:memberId/programs/:assignmentId/invoice/payments` | Receive an installment |
+| POST | `members/:memberId/programs/:assignmentId/invoice/payments/:paymentId/void` | Void a receipt with a reason |
+
+The API server was subsequently started by the user and reported to start without errors. This is not a substitute for a complete API syntax check, authenticated negative-permission tests or a controlled void/rollback integration test.
+
+### 40.4 Flutter Payments & Collections integration
+
+Files changed or added in the Gym App working copy:
+
+- `lib/features/payments/presentation/payments_screen.dart`
+- New: `lib/features/payments/data/member_program_billing_service.dart`
+- New: `lib/features/payments/presentation/member_program_billing_dialog.dart`
+- `lib/features/auth/presentation/gym_authenticated_screen.dart`
+- Existing program pause/resume service reused: `lib/features/members/data/member_program_service.dart`
+
+The authenticated Payments screen passes these permissions into the screen:
+
+- `canViewProgramInvoices`
+- `canViewProgramPayments`
+- `canReceiveProgramPayments`
+- `canVoidProgramPayments`
+- `canPausePrograms`
+- `canResumePrograms`
+- `canApproveProgramPauseExtension`
+
+The role-permission UI received labels for the four Program Billing permission keys.
+
+The Program Assignments report is gated by collections-report, program-assignment, program-invoice-view and program-payment-view permissions. Its table includes the program/member information and financial values. The row action menu provides separate Program Payment, Pause Program and Resume Program actions. Program payment actions call the new Program Billing dialog/service; they do not call the membership invoice/payment dialog.
+
+Pause/resume behavior continues to use the existing `MemberProgramService` and the established resume-preview decision:
+
+- Resume without extension is available as the non-extension choice.
+- Approving an extended end date requires `member_programs.pause_extension.approve`.
+- The backend remains authoritative for the calculated extension date.
+- Program billing remains collectible while paused.
+
+### 40.5 Installment-entry dialog lifecycle correction
+
+The first runtime test was performed after registering a new member and assigning a program. In Payments & Collections, the user opened the Program Assignments row's three-dot action, opened Program Payment and selected Receive Installment.
+
+The API payment operation succeeded, but Flutter then reported widget lifecycle/build-scope exceptions, including:
+
+- `_dependents.isEmpty`
+- `Tried to build dirty widget in the wrong build scope`
+
+The initial form used a nested `showDialog` with `StatefulBuilder` and text controllers owned by the parent method. A follow-up refactor moved the installment form into its own stateful widget, `_ProgramInstallmentEntryDialog`, which owns its amount/reference/notes controllers and disposes them from its own `dispose()` method. Payment submission and invoice refresh remain in the parent dialog.
+
+The user subsequently reported that payment was working. At least one real development installment request was confirmed saved successfully by the API. The user must not resubmit that same payment merely to repeat the original test.
+
+### 40.6 Void-reason dialog lifecycle issue — patch supplied; verification pending
+
+A separate runtime failure occurred when opening/using the void-payment reason field:
+
+- Flutter reported: `A TextEditingController was used after being disposed.`
+- The error identified a `TextField` in `member_program_billing_dialog.dart`.
+- The original `_voidPayment()` method created a reason controller, opened a dialog, and disposed the controller immediately after the dialog returned.
+
+A targeted patch was supplied to move the void reason field into a separate stateful widget named `_ProgramPaymentVoidReasonDialog`, with controller ownership/disposal inside that widget. The parent continues to call the existing void API with the reason and then refreshes invoice/payment history.
+
+**Status:** The patch was provided, but no execution output, analyzer result or successful void-payment retest was supplied before this document update. Do not mark the void lifecycle issue fixed until the patch is confirmed applied and runtime-tested.
+
+### 40.7 Payments & Collections PDF — Program Assignments column change requested
+
+The user generated and shared a successful one-page Payments & Collections PDF screenshot. The Membership Collections section displayed its financial columns and was not requested to change.
+
+The PDF Program Assignments section currently used these columns:
+
+- Member
+- Member Code
+- Program
+- Duration
+- Start Date
+- Expected End
+- Status
+
+The user requested to remove Start Date, Expected End and Status, and replace them with:
+
+- Fee
+- Paid
+- Outstanding
+
+The requested final Program Assignments columns are therefore:
+
+| Column order | Header |
+|---:|---|
+| 1 | Member |
+| 2 | Member Code |
+| 3 | Program |
+| 4 | Duration |
+| 5 | Fee |
+| 6 | Paid |
+| 7 | Outstanding |
+
+Target source file:
+
+```text
+lib/features/payments/data/payments_collections_pdf_service.dart
+```
+
+The targeted `_buildProgramTable()` PowerShell patch uses the existing report fields `fee`, `net_paid`, `outstanding` and `currency_code`, and leaves `_buildMembershipTable()` unchanged.
+
+**Status:** The targeted patch was supplied, but the user has not yet provided its execution/validation output or a new PDF screenshot. Treat the requested seven-column PDF layout as pending confirmation, not as a completed implementation.
+
+### 40.8 Validation evidence and limits
+
+| Check / observation | Result |
+|---|---|
+| Program Billing database migration | User reported success; 1 assignment and 1 invoice found, 0 payments at migration time |
+| API process after controller/route patch | User reported server started without errors |
+| Initial Flutter Program Billing integration analysis | Two findings: unused `_total` getter and deprecated DropdownButtonFormField `value` property |
+| Cleanup patch | Removed unused getter and changed to `initialValue` |
+| Flutter analysis after that cleanup | Passed — `No issues found!` |
+| `git diff --check` after cleanup | Passed |
+| First Program Installment API test | User confirmed payment succeeded/saved |
+| Installment dialog lifecycle refactor | Applied according to subsequent user testing; user reported payment working |
+| Separate void reason lifecycle patch | Supplied; application and test not yet confirmed |
+| Program Assignments PDF seven-column patch | Supplied; application and rendered PDF review not yet confirmed |
+
+The no-issues analyzer result above was reported after the initial lint cleanup. A fresh full `flutter analyze` output after both stateful-dialog refactors was not included in the conversation. Do not state that the latest final source has passed analysis until that check is rerun.
+
+No complete test evidence has yet been supplied for overpayment rejection, idempotency replay, card permission denial, void audit/rollback, voided receipt persistence, balance restoration after void, or payment collection while paused.
+
+### 40.9 Working-copy paths and backup discipline
+
+The latest PowerShell commands in this continuation used the Gym App path:
+
+```text
+C:\Users\Pradeep\Documents\INNOVEX WEB\Flutter Projects\gym_management_app
+```
+
+The related API working copy is:
+
+```text
+C:\Users\Pradeep\Documents\INNOVEX WEB\Flutter Projects\gym_management_api
+```
+
+These are the current office-laptop paths used for this continuation. Earlier paths recorded in Sections 31–39 remain historical and must not be substituted without checking the active workstation.
+
+Timestamped backups were created in the Gym App `.patch-backups` folder during the Program Billing changes. One explicitly reported cleanup backup was:
+
+```text
+.patch-backups/member_program_billing_dialog_20261123_133811.dart
+```
+
+Continue the established patch discipline: absolute paths, timestamped backup before writing, exact anchor/count validation, then `dart format`, full `flutter analyze` and `git diff --check`. Do not commit backup folders.
+
+### 40.10 GitHub and release status for this milestone
+
+The canonical master document is stored in the root of:
+
+```text
+https://github.com/arafath65/gym-management-super-admin
+GYM_MANAGEMENT_PROJECT_MASTER.md
+```
+
+This Section 40 is a documentation-only update. It does not publish the pending Program Billing API or Gym App working-copy changes. The three repositories remain independent, and the API/App source working trees must be inspected and validated separately before any source-code release.
+
+Do not stage `.patch-backups/`, local archives, `.env`, secrets, local DB dumps or private member images. Do not use `git add .`, force-push, reset or overwrite unrelated local work. After this master-file update is committed to GitHub, the local Super Admin clone must fetch and fast-forward only when its working tree is safe to update.
+
+### 40.11 Exact continuation checklist
+
+1. Confirm the void-reason lifecycle patch is applied in `member_program_billing_dialog.dart`; run `dart format`, full `flutter analyze` and `git diff --check`.
+2. Test voiding a disposable/test installment with a reason. Confirm the payment is marked voided, the audit record exists, and outstanding increases by the voided amount. Confirm the receipt remains in history after refresh.
+3. Confirm the Program Assignments PDF patch is applied in `payments_collections_pdf_service.dart`; run format/analyze/diff checks and export a fresh PDF.
+4. Visually verify the seven requested Program Assignments columns and confirm Membership Collections is unchanged.
+5. Test partial installment, full settlement, overpayment rejection, idempotency replay, card permission enforcement and collecting while a program is paused.
+6. Review API and Gym App repository status/diffs separately. Run Node syntax checks for changed API files and full Flutter analysis for the Gym App before source release.
+7. Record the exact source commits and remote main SHAs only after those source releases actually complete.
+
+**End of current authoritative master handover document (23 November 2026, Section 40).**
