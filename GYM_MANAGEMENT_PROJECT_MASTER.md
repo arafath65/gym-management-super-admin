@@ -1,7 +1,7 @@
 # GYM MANAGEMENT PROJECT MASTER
 
 **Technical handover and continuation reference**
-**Last updated:** 23 November 2026 (Dashboard API, branch-aware reporting, permission-gated metrics, monthly membership targets and live Flutter Dashboard integration confirmed; Section 41)
+**Last updated:** 23 November 2026 (Global branch selector consolidated with Dashboard reporting scope; All Branches reporting option added; Section 42)
 **Project owner / development context:** Innovex Fitness Center / Innovex Web Solutions
 **Primary development environment:** Windows, PowerShell, Flutter, Node.js and MySQL 8. The active PowerShell project paths explicitly confirmed during the 20 November continuation are `D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_api` and `D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_app`. Earlier office-laptop paths and GitHub release checkpoints in Sections 31, 33 and 35 are historical records; verify the current machine, branch and working-tree state before any Git operation.
 
@@ -4923,3 +4923,126 @@ Before publishing Dashboard source code, inspect the API and Gym App working tre
 7. Review the API and Gym App Git working trees separately and publish the Dashboard source changes only after the user explicitly requests that source release.
 
 **End of current authoritative master handover document (23 November 2026, Section 41).**
+
+---
+
+## 42. Global Branch Selector and Dashboard Reporting Scope — 23 November 2026
+
+### 42.1 User requirement and corrected UI behavior
+
+The user reviewed the working Dashboard UI and identified that the Dashboard contained a second "REPORT VIEW" branch selector even though the authenticated application already had a global branch selector in the top bar. The duplicate selector was removed in the Gym App working copy.
+
+The top-bar global selector is now intended to be the one visible branch-selection control:
+
+- Selecting an individual branch (for example Colombo or Nugegoda) continues to use the existing Gym Staff session branch-switch API. The returned session replaces the current in-memory staff/session state, and the Dashboard reloads for that selected active branch.
+- Selecting **All Branches** changes the Dashboard reporting scope to the API's authorized-branches aggregate. It does not call the operational branch-switch API and does not write an artificial branch ID into the Gym Staff session.
+- The last real operational branch remains in the Gym Staff session while the Dashboard is showing All Branches.
+- Selecting a real branch again exits All Branches reporting scope and switches/returns the operational session to that real branch.
+- The separate Dashboard "REPORT VIEW" row and its dropdown were removed from the Dashboard layout.
+- The Dashboard still calls GET dashboard/summary with branch_id set to the selected real branch ID or the literal value all. The API's existing branch-scope validation resolves all only to the branches authorized in the authenticated Gym Staff session.
+
+This preserves the distinction between an operational session branch and an aggregate reporting scope. All Branches is a report selection, not a new operational branch and not a device's registered branch.
+
+### 42.2 Other modules and All Branches scope
+
+The global top-bar selector's real-branch options continue to change the Gym Staff active branch, so existing branch-aware modules that use the session context continue to follow the selected active branch.
+
+All Branches currently applies to the Dashboard summary only. Other operational modules continue to use the last real active branch in the Gym Staff session. Do not imply that every operational module has been converted to cross-branch aggregate reporting; that would require separate module/API behavior and authorization work.
+
+The All Branches option is available through the global selector when the user can switch branches and has more than one authorized branch. The backend remains authoritative for allowed branch scope. A UI selection is never a substitute for server-side branch authorization.
+
+### 42.3 Flutter implementation change
+
+Working-copy source file:
+
+```text
+lib/features/auth/presentation/gym_authenticated_screen.dart
+```
+
+The patch:
+
+1. Replaced Dashboard-only state _dashboardReportBranchId with _globalBranchScopeId.
+2. Removed the _buildDashboardBranchFilter() widget and its invocation from _buildDashboard().
+3. Added an All Branches choice to the existing top-bar global branch PopupMenuButton.
+4. Changed the menu selection handler to distinguish the literal all reporting scope from numeric operational branch IDs.
+5. Kept the existing GymAuthService.switchBranch API call for real branch IDs.
+6. When All Branches is chosen, updates only the reporting scope and reloads dashboard/summary with branch_id=all; it does not call switchBranch.
+7. When the current real branch is selected while All Branches is active, restores that real branch's Dashboard report without unnecessarily calling the switch-branch endpoint.
+8. Keeps existing request sequencing protection for Dashboard requests so stale responses do not overwrite newer selections.
+
+The target editor remains available for a single-branch report when the user has dashboard.membership_target.manage. It is not available for the All Branches aggregate.
+
+### 42.4 Patch and validation evidence
+
+The first attempted patch stopped at an operational-branch-switch multiline anchor mismatch. The user confirmed PowerShell reported that no source file was modified. A corrected patch then replaced complete method sections using stable method boundaries and verified its required anchors before writing.
+
+The successful patch created a timestamped backup in the Gym App .patch-backups directory and changed only gym_authenticated_screen.dart.
+
+The user subsequently reported:
+
+```text
+Formatted lib/features/auth/presentation/gym_authenticated_screen.dart
+Formatted 1 file (1 changed) in 0.09 seconds.
+Analyzing gym_management_app...
+No issues found! (ran in 26.2s)
+```
+
+This confirms formatting and Flutter analyzer success for the global selector patch. The user has not yet reported the final git diff --check result or completed runtime confirmation of the All Branches menu, branch switching, and Dashboard refresh after this patch. Keep those items pending rather than marking them runtime-tested.
+
+### 42.5 Current GitHub source-release checkpoint
+
+The GitHub repositories are independent:
+
+- API: https://github.com/arafath65/gym-management-api
+- Gym App: https://github.com/arafath65/gym-management-apps
+- Master handover: https://github.com/arafath65/gym-management-super-admin/blob/main/GYM_MANAGEMENT_PROJECT_MASTER.md
+
+Remote main heads inspected on 23 November 2026:
+
+| Repository | Remote main commit at inspection |
+|---|---|
+| gym-management-api | 3f5a3780fab8f171438941f8579dc687097133c2 |
+| gym-management-apps | 5841b72dfa084899682fd955d4153fcaa578b237 |
+
+The API remote recursive tree did not contain these Dashboard files at the time of inspection:
+
+```text
+src/controllers/dashboardController.js
+src/routes/dashboardRoutes.js
+scripts/migrateDashboardMembershipTargets.js
+```
+
+The Flutter remote tree contained lib/features/auth/presentation/gym_authenticated_screen.dart, but the latest top-bar All Branches change and Dashboard-filter removal were only confirmed in the local working copy and had not been published at the time of inspection.
+
+A local PowerShell status snapshot shared earlier on 23 November showed pending source changes in both working copies. It included Program Billing/API controller and route changes, a new Program Billing migration and controller, Flutter Payments & Collections and PDF changes, roles-permission UI changes, package changes and new Program Billing Flutter files. Dashboard integration changes were made after that status snapshot, so that old status output is not a complete inventory of the latest working trees.
+
+The user requested that both API and Gym App repositories be pushed. The latest local source files and complete current git status are not directly accessible through the GitHub repository connection. A remote source commit must not be fabricated from partial text excerpts, because doing so could omit local Program Billing and Payments work or overwrite newer files. The current Section 42 master-document update does not publish the API or Gym App source.
+
+### 42.6 Safe release rules and pending source publication
+
+Before publishing either source repository:
+
+1. Re-run git status --short --branch in each local working copy and inspect the complete pending file list.
+2. Keep .patch-backups, .env, secrets, local database dumps, private photos and other generated/private files out of Git.
+3. Preserve the already-working Program Billing and Payments changes; do not reset, stash, discard or overwrite them.
+4. Run git diff --check in both repositories.
+5. Run node --check for the changed API JavaScript files and the dashboard migration/controller/route files. Review the migration before deployment; it is a separate database operation and is not run merely by committing source.
+6. Run full flutter analyze for the Gym App.
+7. Stage an explicit list of modified and new source files; do not use git add ..
+8. Commit and push API and Gym App independently to their own main branches.
+9. Verify both GitHub main heads and inspect their commit file lists after pushing.
+10. Record the resulting commit SHAs and the exact source files included in this document only after the pushes succeed.
+
+Do not push the Super Admin source as part of this milestone. Its role here is to store the project handover document.
+
+### 42.7 Exact continuation point
+
+- Dashboard API functionality and monthly membership target migration were implemented locally and the user confirmed the Dashboard was working before the global selector correction.
+- The Dashboard duplicate branch selector has been removed from the local Flutter source.
+- The top-bar selector now includes All Branches as a Dashboard reporting scope while real branch selection continues to switch the Gym Staff operational session.
+- Flutter formatting and analysis passed after the patch.
+- Runtime verification of the new All Branches menu and subsequent Dashboard refresh remains pending.
+- API and Gym App source release to GitHub remains pending; inspect the latest local working-tree state and preserve Program Billing and Payments changes before committing.
+- When both source pushes are completed, append their commit SHAs and changed-file lists here.
+
+**End of current authoritative master handover document (23 November 2026, Section 42).**
