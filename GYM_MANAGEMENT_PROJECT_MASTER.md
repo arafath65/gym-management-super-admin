@@ -1,7 +1,7 @@
 # GYM MANAGEMENT PROJECT MASTER
 
 **Technical handover and continuation reference**
-**Last updated:** 23 November 2026 (Program Billing, installment collections, dialog lifecycle follow-up and Payments PDF layout; Section 40)
+**Last updated:** 23 November 2026 (Program Billing, installment/void lifecycle fixes and Program Assignments PDF update confirmed; Section 40)
 **Project owner / development context:** Innovex Fitness Center / Innovex Web Solutions
 **Primary development environment:** Windows, PowerShell, Flutter, Node.js and MySQL 8. The active PowerShell project paths explicitly confirmed during the 20 November continuation are `D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_api` and `D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_app`. Earlier office-laptop paths and GitHub release checkpoints in Sections 31, 33 and 35 are historical records; verify the current machine, branch and working-tree state before any Git operation.
 
@@ -4595,7 +4595,7 @@ A separate runtime failure occurred when opening/using the void-payment reason f
 
 A targeted patch was supplied to move the void reason field into a separate stateful widget named `_ProgramPaymentVoidReasonDialog`, with controller ownership/disposal inside that widget. The parent continues to call the existing void API with the reason and then refreshes invoice/payment history.
 
-**Status:** The patch was provided, but no execution output, analyzer result or successful void-payment retest was supplied before this document update. Do not mark the void lifecycle issue fixed until the patch is confirmed applied and runtime-tested.
+**Status — user-confirmed successful (23 November 2026):** The user subsequently confirmed that the void-payment lifecycle patch and the void flow are now successful. The separate stateful reason dialog owns and disposes its controller, while the parent preserves the existing void API call and refresh flow. Keep deeper negative-permission, audit/rollback and balance-recalculation edge cases in the broader test checklist until their specific results are recorded.
 
 ### 40.7 Payments & Collections PDF — Program Assignments column change requested
 
@@ -4637,7 +4637,7 @@ lib/features/payments/data/payments_collections_pdf_service.dart
 
 The targeted `_buildProgramTable()` PowerShell patch uses the existing report fields `fee`, `net_paid`, `outstanding` and `currency_code`, and leaves `_buildMembershipTable()` unchanged.
 
-**Status:** The targeted patch was supplied, but the user has not yet provided its execution/validation output or a new PDF screenshot. Treat the requested seven-column PDF layout as pending confirmation, not as a completed implementation.
+**Status — user-confirmed successful (23 November 2026):** The user subsequently confirmed that the Program Assignments PDF update was successful. The requested seven-column layout is Member, Member Code, Program, Duration, Fee, Paid and Outstanding. Start Date, Expected End and Status were removed from this Program Assignments PDF table. The Membership Collections table was not part of this requested change.
 
 ### 40.8 Validation evidence and limits
 
@@ -4651,8 +4651,8 @@ The targeted `_buildProgramTable()` PowerShell patch uses the existing report fi
 | `git diff --check` after cleanup | Passed |
 | First Program Installment API test | User confirmed payment succeeded/saved |
 | Installment dialog lifecycle refactor | Applied according to subsequent user testing; user reported payment working |
-| Separate void reason lifecycle patch | Supplied; application and test not yet confirmed |
-| Program Assignments PDF seven-column patch | Supplied; application and rendered PDF review not yet confirmed |
+| Separate void reason lifecycle patch | User confirmed successful |
+| Program Assignments PDF seven-column patch | User confirmed successful |
 
 The no-issues analyzer result above was reported after the initial lint cleanup. A fresh full `flutter analyze` output after both stateful-dialog refactors was not included in the conversation. Do not state that the latest final source has passed analysis until that check is rerun.
 
@@ -4697,12 +4697,9 @@ Do not stage `.patch-backups/`, local archives, `.env`, secrets, local DB dumps 
 
 ### 40.11 Exact continuation checklist
 
-1. Confirm the void-reason lifecycle patch is applied in `member_program_billing_dialog.dart`; run `dart format`, full `flutter analyze` and `git diff --check`.
-2. Test voiding a disposable/test installment with a reason. Confirm the payment is marked voided, the audit record exists, and outstanding increases by the voided amount. Confirm the receipt remains in history after refresh.
-3. Confirm the Program Assignments PDF patch is applied in `payments_collections_pdf_service.dart`; run format/analyze/diff checks and export a fresh PDF.
-4. Visually verify the seven requested Program Assignments columns and confirm Membership Collections is unchanged.
-5. Test partial installment, full settlement, overpayment rejection, idempotency replay, card permission enforcement and collecting while a program is paused.
-6. Review API and Gym App repository status/diffs separately. Run Node syntax checks for changed API files and full Flutter analysis for the Gym App before source release.
-7. Record the exact source commits and remote main SHAs only after those source releases actually complete.
+1. Continue broader Program Billing verification: partial installment, full settlement, overpayment rejection, idempotency replay, card permission enforcement and collecting while a program is paused.
+2. Verify void-payment negative-permission handling, audit persistence, transaction rollback behavior and outstanding-balance recalculation as separate edge cases where not already explicitly tested.
+3. Review API and Gym App repository status/diffs separately. Run Node syntax checks for changed API files and full Flutter analysis for the Gym App before source release.
+4. Record the exact source commits and remote main SHAs only after those source releases actually complete.
 
 **End of current authoritative master handover document (23 November 2026, Section 40).**
