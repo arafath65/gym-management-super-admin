@@ -1,7 +1,7 @@
 # GYM MANAGEMENT PROJECT MASTER
 
 **Technical handover and continuation reference**
-**Last updated:** 20 November 2026 (Billing ledger foundation and standalone Payments navigation checkpoint; Payments & Collections redesign requirements and plan-based collections API work recorded in Section 37)
+**Last updated:** 23 November 2026 (Unified plans/programs, attendance, Gym Profile and Payments PDF export checkpoint; Section 39)
 **Project owner / development context:** Innovex Fitness Center / Innovex Web Solutions
 **Primary development environment:** Windows, PowerShell, Flutter, Node.js and MySQL 8. The active PowerShell project paths explicitly confirmed during the 20 November continuation are `D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_api` and `D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_app`. Earlier office-laptop paths and GitHub release checkpoints in Sections 31, 33 and 35 are historical records; verify the current machine, branch and working-tree state before any Git operation.
 
@@ -3849,3 +3849,591 @@ Resume from the D: project paths shown in Section 37.1, but first confirm both r
 ---
 
 **End of current authoritative master handover document (20 November 2026, Section 37).**
+
+
+
+## 38. Payments & Collections — Active-Branch Implementation and Release Preparation (21 November 2026)
+
+This section supersedes the Section 37 statements that the plan-based collections API and redesigned Payments screen were still unimplemented. The feature has now been implemented in the current office working copies and passed source-level validation. Authenticated endpoint and payment-write tests remain outstanding; do not describe the feature as fully runtime-tested or production-released until those tests pass.
+
+### 38.1 Confirmed development paths and repositories
+
+The active Windows PowerShell paths remain:
+
+```text
+D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_api
+D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_app
+```
+
+The two repositories in scope for this release are separate:
+
+| Project | GitHub repository | Default branch |
+|---|---|---|
+| Backend API | `https://github.com/arafath65/gym-management-api` | `main` |
+| Gym operational Flutter app | `https://github.com/arafath65/gym-management-apps` | `main` |
+
+The Super Admin repository `gym-management-super-admin` is a third independent repository and is not part of this Payments & Collections release. Verify each local repository's actual branch, remote and working tree before staging. Do not assume an API commit also releases the Flutter app.
+
+### 38.2 Final Payments & Collections branch rules
+
+The user clarified that the Payments page is scoped to the currently selected active branch, with a deliberate payment-receiver exception:
+
+1. Active membership count, billed totals and outstanding totals are scoped by the primary member's `members.registration_branch_id` matching the authenticated staff session's active branch.
+2. Membership-plan collection count and rows use the same primary-member registration-branch rule.
+3. Member search for ordinary billing search users is limited to active members whose `registration_branch_id` matches the selected active branch.
+4. Staff with `member_billing.payments.receive` may search active members across all branches so they can collect a payment for a visiting member at the currently selected branch.
+5. Collected totals are transaction-branch scoped: include posted payments whose `member_membership_payments.branch_id` is the selected active branch and subtract posted refunds whose `member_membership_refunds.branch_id` is that same branch. A refund linked to a voided payment remains excluded.
+6. A cross-branch collection must not change the member's original registration branch. Payment `branch_id` is taken from the authenticated staff session's active branch.
+7. Organization isolation remains strict. Organization and active branch are derived from the authenticated device/Gym Staff context, never from client-supplied query/body scope.
+
+This is a deliberate distinction between the membership/reporting scope and the transaction-processing scope. For example, a member registered at Branch A may pay at Branch B when the cashier at Branch B has `member_billing.payments.receive`: that member is not included in Branch B's registration-based plan collection list, while the posted payment is included in Branch B's collected total.
+
+### 38.3 Backend implementation recorded in the current working copy
+
+#### Billing collections aggregate
+
+File:
+
+```text
+src/controllers/memberBillingCollectionsController.js
+```
+
+Implemented behavior:
+
+- `getCollectionsSummary` requires a valid Gym Staff organization, active branch and user context.
+- Active memberships are counted once per membership, using the primary member's registration branch and the active primary participant link.
+- Issued invoice totals, net paid and outstanding are aggregated for memberships whose primary member belongs to the active registration branch.
+- Payment allocations and refunds are pre-aggregated to avoid invoice-total multiplication. Only posted payments/refunds and posted invoice waivers affect the current financial calculations; voided events do not.
+- Collected totals use the actual payment branch and actual refund branch.
+- Summary response reports `report_scope: 'active_branch'` and retains metric-visibility checks for the relevant permissions.
+- `getMembershipPlanCollections` filters current active memberships by plan and primary-member registration branch. Count and paginated row queries use the same filter. Rows include the saved membership price snapshot, plan period, billed amount, net paid, outstanding, due-date information and included participants.
+- The current active-membership query excludes future-start and ended memberships and requires the primary membership participant link to remain active.
+
+The existing protected billing fixture must remain unchanged. The previously documented values and fixture identifiers in Section 37 are preserved; do not use it for payment-write testing.
+
+#### Dedicated billing member search
+
+New file:
+
+```text
+src/controllers/memberBillingMemberSearchController.js
+```
+
+`GET /api/members/billing/member-search?q=...` now uses a dedicated billing search controller. It preserves the normal Member Management search controller and its endpoint unchanged.
+
+Search behavior:
+
+- Search by member name, member code, normalized phone, or exact Sri Lankan NIC HMAC lookup.
+- NIC search remains exact; raw NIC is never returned.
+- Search returns up to five active members and masked phone/NIC fields.
+- Ordinary billing-search users are restricted by registration branch.
+- Staff holding `member_billing.payments.receive` may search across registration branches.
+- Response includes `registration_branch_id`, `registration_branch_name`, `registration_branch_code`, and whether cross-branch collection is permitted.
+- Branch details are joined from `branches`; the Flutter UI displays the registration branch name, with a branch-ID fallback.
+
+Routes:
+
+```text
+src/routes/memberBillingRoutes.js
+src/routes/memberRoutes.js
+```
+
+`memberRoutes.js` mounts billing routes under `/api/members`, so the complete search path is `/api/members/billing/member-search`. The billing search route accepts either `member_billing.members.search` or `member_billing.payments.receive`. The normal `GET /api/members/search` remains the Member Management search and is not replaced by billing-specific filtering.
+
+#### Read permissions needed by payment receivers
+
+File:
+
+```text
+src/routes/memberMembershipRoutes.js
+```
+
+The membership-list GET route permits any of:
+
+- `member_memberships.view`
+- `member_billing.member_account.view`
+- `member_billing.payments.receive`
+
+The membership invoice-list GET route permits any of:
+
+- `member_billing.invoices.view`
+- `member_billing.member_account.view`
+- `member_billing.payments.receive`
+
+The invoice payment-history GET route permits either:
+
+- `member_billing.payments.view`
+- `member_billing.payments.receive`
+
+Other create/update/void/refund/waiver permissions remain separately enforced. Card payment additionally requires `member_billing.payments.receive.card` through the existing card-payment permission middleware.
+
+`src/routes/membershipPlanRoutes.js` defines the static `/collections` route before `/:planId`; the collections route requires membership-plan view, billing dashboard view and billing report view permissions. The summary route requires billing dashboard view.
+
+#### Payment transaction branch storage
+
+File:
+
+```text
+src/controllers/memberMembershipPaymentController.js
+```
+
+The existing payment receive controller derives `branchId` from `req.gymStaff.branchId` and inserts `context.branchId` into `member_membership_payments.branch_id`. The audit context records the same active branch. The cross-branch payment exception does not update `members.registration_branch_id`. This code was inspected in the working copy; final transaction behavior still requires the controlled disposable-invoice test listed in Section 38.7.
+
+### 38.4 Flutter implementation recorded in the current working copy
+
+Main screen:
+
+```text
+lib/features/payments/presentation/payments_screen.dart
+```
+
+Service:
+
+```text
+lib/features/payments/data/member_billing_collections_service.dart
+```
+
+Implemented behavior:
+- Four compact summary cards: active memberships, total billed, total collected and outstanding.
+- Automatic member type-ahead search with a 350 ms debounce and a two-character minimum.
+- The selected-member flow requests `status: 'active'` and also verifies current start/end dates. It excludes non-current and ended participant associations according to the current API status response.
+- Selected member's active memberships are displayed for invoice/payment follow-up.
+- Membership plan selector loads active plans; selecting a plan loads a server-paginated collection table.
+- The seven columns are Member, Plan/Period, Fee, Billed, Net Paid, Outstanding and Next Due.
+- The collection table is wrapped in a responsive layout with a minimum width of 1080 logical pixels. On wider tablet layouts it expands to the available width; on narrower layouts horizontal scrolling is retained.
+- Member search results show the member's original registration branch name/code returned by the billing API, with a branch-ID fallback.
+- Request sequence IDs and loading states prevent stale responses from replacing newer search/collection results.
+
+The authenticated host screen `lib/features/auth/presentation/gym_authenticated_screen.dart` keys `PaymentsScreen` by `ValueKey(_branch['id'])`. When the selected active branch changes, the Payments screen is recreated and its `initState` reloads the branch-scoped summary and plan list. The selected branch is already represented in this key; no extra branch-ID query parameter is supplied by the Flutter client.
+
+The general Member Management search remains separate. `MemberBillingCollectionsService` performs Payments search against the billing route; `MemberService.searchMembers` retains `members/search`. `MemberMembershipService.searchMembers` delegates back to the general member search for other membership flows.
+
+### 38.5 Working-copy patch and backup history
+
+The following backup files were created on the development machine while applying this milestone. They are local recovery artifacts and should not be committed:
+
+- `gym_management_api/src/controllers/memberBillingCollectionsController.js.backup-20261120-232617892`
+- `gym_management_api/src/routes/memberBillingRoutes.js.backup-20261120-232929498`
+- `gym_management_api/src/routes/memberMembershipRoutes.js.backup-20261120-232929498`
+- `gym_management_app/lib/features/members/data/member_service.dart.backup-20261120-233156846`
+- `gym_management_app/lib/features/members/data/member_membership_service.dart.backup-20261120-233156846`
+- `gym_management_app/lib/features/payments/presentation/payments_screen.dart.backup-20261120-233911610`
+- `gym_management_app/lib/features/members/data/member_membership_service.dart.backup-20261120-233911610`
+
+Never stage these backups, `.patch-backups`, review ZIPs, `.env`, credentials, JWTs, device tokens or local database dumps. Do not use `git add .` as a shortcut.
+
+### 38.6 Validation evidence completed
+
+The following checks were reported successful by the user in the current continuation:
+
+| Check | Result |
+|---|---|
+| API health `GET /api/health` | Pass — API and MySQL both returned `connected` |
+| `node --check` on seven modified API files | Pass |
+| Flutter billing-search service patch formatting | Pass |
+| Flutter analysis after billing-search service integration | Pass — no issues found |
+| Flutter Payments screen formatting | Pass |
+| Flutter analysis after Payments UI patch | Pass — no issues found |
+| Billing search controller branch-name join syntax validation | Pass |
+| User confirmation of the registration-branch display update | Confirmed working |
+
+The health response observed was:
+
+```json
+{
+  "success": true,
+  "api": "connected",
+  "database": "connected"
+}
+```
+
+These are source/syntax/analyzer and API-health checks only. They do not prove authenticated branch-specific SQL results or the payment-write business flow.
+
+### 38.7 Authenticated runtime tests still required
+
+Six main test stages remain before declaring Payments & Collections fully verified:
+
+1. **Gym Staff login and active branch:** authenticate with a valid device token and staff account; confirm the selected `branchId` is the active branch in the returned staff session. Keep credentials and tokens out of chat/logged output.
+2. **Member search access rules:** a user with ordinary billing-search permission sees only active members registered at the active branch; a user with `member_billing.payments.receive` can search an active member registered at another branch. Confirm the response contains branch ID/name/code and no raw NIC/phone.
+3. **Collections summary:** compare active membership count and invoice-based billed/outstanding totals to read-only SQL for the selected registration branch; compare collected total to posted payments and posted refunds processed at the active branch. Check metric visibility for staff with restricted dashboard permissions.
+4. **Plan collections:** confirm membership count and paginated rows include only current active memberships for the selected plan whose primary member registration branch matches the active branch. Verify saved fee snapshot, billed, net paid, outstanding and due-date calculations against the ledger.
+5. **Branch switch:** switch the authenticated staff session to another authorized branch; confirm the app issues the new staff session and Payments summary/plan collections reload using the new branch. Confirm no old in-flight request overwrites new-branch values.
+6. **Cross-branch payment write:** use a disposable test invoice and a payment receiver at Branch B to collect for a member registered at Branch A. Verify the new posted payment's `branch_id` is Branch B and the member's `registration_branch_id` remains Branch A. Confirm the Branch B collected total changes while Branch A membership/billed/outstanding scope remains registration-based. Do not mutate the protected Section 37 fixture.
+
+The authenticated login controller uses `POST /api/gym-auth/login` with a device token in `X-Device-Token` and an identifier (username or email) plus password. Initial branch selection may use the selection-token flow; a completed staff session uses the Gym Staff JWT in `Authorization: Bearer ...`. Exact login response/branch-selection payload should be re-read from the current controller before writing test automation. Do not include secrets in a handover or Git commit.
+
+### 38.8 GitHub release status and exact next release procedure
+
+The two repositories were confirmed to exist and have `main` as the default branch. The GitHub heads inspected during release preparation were:
+
+- API `main`: `4072e3141eb31ed689e5cc229f3e682f2fdd34ad`
+- Flutter app `main`: `654d16af364a2e1a7d48d320fc19a274f2e65be5`
+
+Those are the observed remote heads before this release operation; they are not proof that the current local working copies are clean or synchronized. Compare local branch and remote state before committing. This Section 38 must be updated again with actual commit SHAs and push results after a successful release.
+
+Release safety rules:
+
+- Commit and push API and Flutter app independently.
+- Inspect `git status --short`, current branch, configured `origin` and `git diff --check` separately in each project.
+- Review exact diff before staging; stage only intended tracked and new source/config/migration files.
+- Exclude all backup files and secrets. Do not commit `.env` or local database exports.
+- Do not use `git add .`, force-push, amend the previous release, or reset unrelated working changes.
+- Push only after API syntax checks and Flutter analysis pass; confirm each push by reading the remote branch head/commit URL.
+- The standalone master document should be kept as the project continuation reference and included in the API repository documentation (recommended path: `docs/GYM_MANAGEMENT_PROJECT_MASTER.md`) so the API repository has the canonical cross-project handover.
+
+### 38.9 Current exact continuation point
+
+The feature implementation is installed in the current Windows working copies and the user has confirmed the new registration-branch display works. API health, source syntax and Flutter analyzer checks have passed. The next task is to finish the authenticated runtime tests in Section 38.7, then commit/push the two project repositories separately and record their resulting commit SHAs here. The existing protected billing test fixture must remain unchanged throughout.
+
+---
+
+**End of current authoritative master handover document (21 November 2026, Section 38).**
+
+
+---
+
+## 39. Unified Plans, Attendance, Gym Profile and Payments PDF Export — 22–23 November 2026
+
+This section records the implementation work completed after Section 38. It supersedes older pending-status statements only where the newer implementation is described below. Earlier technical history remains intact.
+
+The current API and Flutter changes are in the office Windows working copies. The user has confirmed that the application and Payments & Collections PDF export are working, and the full Flutter analyzer now reports no issues. The latest API/App source changes have not yet been confirmed as committed or pushed.
+
+### 39.1 Active workstation and three independent repositories
+
+Project root:
+
+D:\Personal\INNOVEX WEB\Flutter Projects
+
+| Project | Local folder | GitHub remote | Branch observed |
+|---|---|---|---|
+| Gym Management API | gym_management_api | https://github.com/arafath65/gym-management-api.git | main |
+| Gym Management App | gym_management_app | https://github.com/arafath65/gym-management-apps.git | main |
+| Gym Management Super Admin | gym_management_super_admin | https://github.com/arafath65/gym-management-super-admin.git | main |
+
+The canonical cross-project handover document is maintained in the Super Admin repository:
+
+gym_management_super_admin/GYM_MANAGEMENT_PROJECT_MASTER.md
+
+The three repositories must be reviewed and released independently. Super Admin is the documentation home for this master; the current feature source changes belong to the API and Gym App. No Super Admin application source feature change is part of this release.
+
+### 39.2 Unified membership plan and fitness program catalog
+
+The catalog implementation now supports membership plans and fitness programs together through the unified plan-reference structure.
+
+Relevant API files include:
+
+- src/controllers/membershipPlanController.js
+- src/controllers/memberMembershipController.js
+- src/controllers/memberProgramController.js
+- src/routes/membershipPlanRoutes.js
+- src/routes/memberProgramRoutes.js
+
+Migration scripts present in the API working tree:
+
+- scripts/migrateUnifiedPlanCatalog.js
+- scripts/migrateMemberProgramUnifiedPlanReference.js
+
+Flutter areas updated include:
+
+- lib/features/membership_plans/data/membership_plan_service.dart
+- lib/features/membership_plans/presentation/membership_plans_screen.dart
+- lib/features/members/data/member_program_service.dart
+- lib/features/members/presentation/member_program_screen.dart
+- lib/features/members/presentation/member_plans_screen.dart
+- lib/features/members/presentation/member_membership_screen.dart
+- lib/features/members/presentation/member_detail_screen.dart
+
+The catalog service can fetch the combined catalog without forcing the membership-only plan category. The report selector differentiates catalog entries by category and uses separate selection keys for membership plan IDs and program IDs.
+
+Treat each migration as a deployment operation. Inspect its contents, confirm the target database and take a database backup before applying it to another environment. Never rerun a migration blindly.
+
+### 39.3 Program pause and resume
+
+The API program lifecycle implementation was extended in:
+
+- src/controllers/memberProgramController.js
+- src/routes/memberProgramRoutes.js
+
+Migration:
+
+- scripts/migrateProgramPauseResume.js
+
+The Flutter member-program service and screen were updated for the associated program lifecycle behavior.
+
+The agreed resume workflow must preserve the confirmation step: when a program has been paused, show the frozen duration and ask the user to approve whether the program end date should be extended. Do not silently extend the end date without the user's confirmation.
+
+Verify exact status-transition rules, duration calculations, audit writes and authorization in the current source before further changing this workflow.
+
+### 39.4 Attendance and attendance billing
+
+New API files reported in the current working tree:
+
+- src/controllers/memberAttendanceController.js
+- src/routes/attendanceRoutes.js
+- scripts/migrateAttendanceBilling.js
+
+New Flutter files:
+
+- lib/features/attendance/data/attendance_service.dart
+- lib/features/attendance/presentation/attendance_screen.dart
+
+The established organization/branch model continues to apply:
+
+- registration_branch_id is the member's original registration branch and remains useful for branch registration reporting.
+- Registration branch is not an access restriction. Members may attend other branches within the same organization.
+- Each attendance record stores the actual branch where attendance occurred.
+- The attendance branch is derived from the authenticated Gym Staff session's active branch, not from a client-supplied branch value.
+
+Attendance billing support is represented in the migration and related membership billing controller changes. Migration state, billing calculations, attendance write behavior and cross-branch access still require environment-specific verification before declaring the entire attendance/billing workflow production-verified.
+
+### 39.5 Gym Profile and logo
+
+Gym Profile API files reported in the current working tree:
+
+- src/controllers/gymProfileController.js
+- src/routes/gymProfileRoutes.js
+- src/services/storage/gymProfileLogoProcessor.js
+- src/services/storage/gymProfileLogoStorage.js
+
+Flutter files:
+
+- lib/features/gym_profile/data/gym_profile_service.dart
+- lib/features/gym_profile/presentation/gym_profile_screen.dart
+
+The organization profile stores the gym/business name, address, phone, WhatsApp phone, email, website and logo.
+
+The Flutter profile screen uses the actual response properties name, address, phone, whatsappPhone, email, website and hasLogo. The logo is retrieved separately using the authenticated Gym Profile logo endpoint.
+
+Keep environment files, credentials, uploaded private images and local upload data out of Git commits.
+
+### 39.6 Program assignment report endpoint
+
+A branch-scoped program-assignment reporting endpoint is present in the API working copy:
+
+GET /api/members/billing/program-assignments
+
+Relevant API files:
+
+- src/controllers/memberBillingCollectionsController.js
+- src/routes/memberBillingRoutes.js
+
+Flutter service:
+
+- lib/features/payments/data/member_billing_collections_service.dart
+
+Flutter service method:
+
+getProgramAssignmentReport({int? programId, int page = 1, int pageSize = 100})
+
+The endpoint supports an optional program ID and retrieves assignment rows for the authenticated organization and active branch. The route requires both member_billing.reports.view and member_programs.view.
+
+Program assignments are not financial collection records. Their report must show assignment details such as member, program, duration, dates and status. Do not fabricate billed, paid or outstanding values for programs.
+
+Before extending report mappings, inspect the current API controller's response property names and keep the Flutter mapping aligned to the actual response.
+
+### 39.7 Payments & Collections combined report selector
+
+The existing Payments & Collections screen was extended in place. No separate payment-entry screen was added.
+
+Relevant Flutter files:
+
+- lib/features/payments/presentation/payments_screen.dart
+- lib/features/payments/data/member_billing_collections_service.dart
+- lib/features/membership_plans/data/membership_plan_service.dart
+
+The combined selector has:
+
+1. All Plans as the first/default option.
+2. Membership Plan catalog entries.
+3. Program catalog entries.
+
+The selection key distinguishes membership plan IDs from program IDs so the same numeric ID cannot be mistaken for the other category.
+
+All Plans displays two separate report sections:
+
+- Membership Collections, using the existing plan collections API and actual billing figures.
+- Program Assignments, using the dedicated branch-scoped assignment report endpoint and assignment details only.
+
+Selecting an individual membership plan loads that plan's collections. Selecting an individual program loads that program's assignment rows.
+
+The existing membership collection table, payment-entry workflow, invoice navigation, row action controls and permission checks were retained. The report reuses the existing server-side collections API; membership figures are not newly calculated in Flutter.
+
+All Plans loads membership collection pages plan by plan through the existing plan collections endpoint and loads program assignment pages through the program report endpoint. Individual membership/program PDF exports fetch all report pages rather than only the currently visible screen page.
+
+All data continues to rely on authenticated organization, active-branch and backend permission enforcement. Client-side visibility is only a usability layer and is not a security boundary.
+
+### 39.8 PDF export and Gym Profile header
+
+A dedicated PDF service was added:
+
+- lib/features/payments/data/payments_collections_pdf_service.dart
+
+The Payments & Collections selector now has an Export PDF control beside it.
+
+Dependencies added to the Flutter project:
+
+- pdf
+- printing
+
+The package lockfile and supported platform plugin registration files were updated by Flutter package installation.
+
+PDF behavior:
+
+- A4 landscape report layout.
+- Current organization's saved Gym Profile is loaded through GymProfileService.
+- The header includes the actual organization name, address, phone, WhatsApp, email and website when values are present.
+- The saved gym logo is fetched through the Gym Profile logo endpoint and embedded when available.
+- All Plans exports Membership Collections and Program Assignments in separate sections.
+- Individual Membership Plan exports that plan's membership collection report.
+- Individual Program exports that program's assignment report.
+- Membership financial values come from the collections API response.
+- Program report rows contain program assignment details only.
+- Printing.sharePdf opens the platform share/save flow.
+
+The real WhatsApp profile field is whatsappPhone; the PDF service mapping was corrected to include it.
+
+The profile endpoint must be accessible to the authenticated account for organization details to load. The logo loader allows the PDF to continue without a logo if the logo endpoint is unavailable. The current PDF font setup has not been verified for Sinhala/Tamil rendering; do not claim multilingual font support until embedded fonts and rendered output are tested.
+
+### 39.9 Current working-tree change inventory
+
+The PowerShell git status supplied on 23 November reported the following API tracked modifications:
+
+- src/controllers/memberBillingCollectionsController.js
+- src/controllers/memberMembershipController.js
+- src/controllers/memberMembershipInvoiceController.js
+- src/controllers/memberMembershipPaymentController.js
+- src/controllers/memberProgramController.js
+- src/controllers/membershipPlanController.js
+- src/routes/memberBillingRoutes.js
+- src/routes/memberMembershipRoutes.js
+- src/routes/memberProgramRoutes.js
+- src/routes/membershipPlanRoutes.js
+- src/server.js
+
+New API source/migration files reported:
+
+- scripts/migrateAttendanceBilling.js
+- scripts/migrateMemberProgramUnifiedPlanReference.js
+- scripts/migrateProgramPauseResume.js
+- scripts/migrateUnifiedPlanCatalog.js
+- src/controllers/gymProfileController.js
+- src/controllers/memberAttendanceController.js
+- src/routes/attendanceRoutes.js
+- src/routes/gymProfileRoutes.js
+- src/services/storage/gymProfileLogoProcessor.js
+- src/services/storage/gymProfileLogoStorage.js
+
+The API working tree also contained many untracked backup files, .patch-backups, src.zip and a migration backup. Those are not release source files and must not be staged.
+
+The PowerShell git status supplied on 23 November reported the following Flutter tracked modifications:
+
+- lib/core/services/gym_api_client.dart
+- lib/features/audit_logs/presentation/audit_logs_screen.dart
+- lib/features/auth/presentation/gym_authenticated_screen.dart
+- lib/features/members/data/member_membership_service.dart
+- lib/features/members/data/member_program_service.dart
+- lib/features/members/presentation/member_detail_screen.dart
+- lib/features/members/presentation/member_management_screen.dart
+- lib/features/members/presentation/member_membership_billing_screen.dart
+- lib/features/members/presentation/member_membership_screen.dart
+- lib/features/members/presentation/member_program_screen.dart
+- lib/features/membership_plans/data/membership_plan_service.dart
+- lib/features/membership_plans/presentation/membership_plans_screen.dart
+- lib/features/payments/data/member_billing_collections_service.dart
+- lib/features/payments/presentation/payments_screen.dart
+- pubspec.yaml
+- pubspec.lock
+- generated Linux, macOS and Windows plugin registration files
+
+New Flutter source files reported:
+
+- lib/features/attendance/data/attendance_service.dart
+- lib/features/attendance/presentation/attendance_screen.dart
+- lib/features/gym_profile/data/gym_profile_service.dart
+- lib/features/gym_profile/presentation/gym_profile_screen.dart
+- lib/features/members/presentation/member_plans_screen.dart
+- lib/features/payments/data/payments_collections_pdf_service.dart
+
+The Flutter working tree also contained backups, .patch-backups and lib.zip; exclude these.
+
+This inventory is the user-reported status at the time of inspection. Recheck current local status immediately before staging and do not assume no further changes have occurred.
+
+### 39.10 Validation evidence
+
+The user reported these successful Flutter checks:
+
+| Check | Result |
+|---|---|
+| PDF service formatting | Passed |
+| PDF service Flutter analysis | No issues found |
+| Payments screen formatting | Passed |
+| Payments screen analysis | No issues found |
+| Payments screen + PDF service analysis | No issues found |
+| Full Gym App analysis before lint cleanup | One informational unnecessary-import notice in gym_api_client.dart |
+| Removal of redundant dart:typed_data import | Completed with timestamped backup |
+| Final full-project flutter analyze | No issues found |
+| App and PDF manual test | User reported working |
+
+The manual confirmation was general; it did not include captured screenshots or a separate verified test report for every selection, report field and branch. No fresh independent API syntax/test report, migration audit, production deployment verification or live database integration test was provided for this Section 39 checkpoint.
+
+Do not label all API workflows production-ready based on Flutter analyzer success or the user's general app/PDF confirmation.
+
+### 39.11 Backup and release safety
+
+The current local working trees contain timestamped backups and patch-backup folders. They are local recovery artifacts and must not be committed.
+
+Exclude:
+
+- .patch-backups/
+- *.backup_*
+- *.backup-*
+- *.bak-*
+- *.failedpatch_*
+- src.zip and lib.zip
+- .env files and secrets
+- Local database exports
+- Private uploaded gym/member image data and local upload directories
+
+Keep local backups for recovery unless the user separately requests cleanup. Do not stage these files merely because they appear in the untracked list.
+
+### 39.12 GitHub release plan and status
+
+The three repository releases remain independent:
+
+1. Update and commit the master document in gym_management_super_admin.
+2. Review and release backend implementation/migration source in gym_management_api.
+3. Review and release Flutter source, dependencies and required platform plugin registrations in gym_management_app.
+
+Before staging the API and App:
+
+- Confirm main branch and origin remote.
+- Fetch origin/main and inspect local/remote divergence.
+- Inspect git status --short, git diff --stat and git diff --check.
+- Review exact source/migration changes.
+- Stage only the intended listed source files and generated dependency registration files.
+- Run Node syntax checks on every changed JavaScript source and migration.
+- Run full flutter analyze in Gym App.
+- Review staged file names and staged diff before committing.
+
+Do not use git add ., force-push, amend an existing release, reset unrelated work or stage backups, archives, secrets or local data.
+
+The Super Admin document is being updated as the canonical handover. Its own documentation commit must be recorded separately. The API and App working-copy changes were not yet confirmed pushed at this checkpoint.
+
+### 39.13 Exact continuation point
+
+The Gym App full analyzer passes with no issues. The user has confirmed the Payments & Collections UI and PDF export are working.
+
+Next steps:
+
+1. Confirm the updated master document is present in the Super Admin repository and record its documentation commit SHA.
+2. Run API syntax checks, inspect migration contents and review API staged changes.
+3. Stage and release API source/migration files independently, excluding backups and archives.
+4. Stage and release Gym App files independently, retaining required package and platform plugin changes but excluding backups and archives.
+5. Record each final commit SHA and verify each remote main branch is synchronized.
+6. Continue testing any remaining endpoint, branch-scope, report-field, PDF layout and production deployment details separately.
+
+Do not repeat the unified catalog, program pause/resume, Gym Profile or PDF implementation unless a new defect is reported. Continue from this documented state.
+
+---
+
+**End of current authoritative master handover document (23 November 2026, Section 39).**
