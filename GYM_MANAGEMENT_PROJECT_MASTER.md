@@ -1,7 +1,7 @@
 # GYM MANAGEMENT PROJECT MASTER
 
 **Technical handover and continuation reference**
-**Last updated:** 23 November 2026 (Global branch selector consolidated with Dashboard reporting scope; All Branches reporting option added; Section 42)
+**Last updated:** 25 November 2026 (Dashboard member QR shortcut; membership/program payment receipts; consolidated multi-select receipt printing; Section 44)
 **Project owner / development context:** Innovex Fitness Center / Innovex Web Solutions
 **Primary development environment:** Windows, PowerShell, Flutter, Node.js and MySQL 8. The active PowerShell project paths explicitly confirmed during the 20 November continuation are `D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_api` and `D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_app`. Earlier office-laptop paths and GitHub release checkpoints in Sections 31, 33 and 35 are historical records; verify the current machine, branch and working-tree state before any Git operation.
 
@@ -5202,3 +5202,244 @@ After deploying the matching API and App versions to a test environment:
 - Database migrations and environment deployment remain separate tasks. Runtime verification listed in Section 43.5 remains required.
 
 **End of current authoritative master handover document (23 November 2026, Section 43).**
+
+---
+
+## 44. Gym App QR Shortcut, Payment Receipt PDFs and Consolidated Receipt Printing — 25 November 2026
+
+This section is the newest working-copy checkpoint and supersedes older status statements in Sections 1, 18, 21, 22, 37–43 wherever they describe the Gym App payment/receipt work as not yet implemented. Earlier sections remain historical records of the state at their stated dates. This section distinguishes source changes and analyzer results from runtime behavior that still needs confirmation.
+
+### 44.1 Current project and repository boundary
+
+The Gym App source files changed during this checkpoint are in the active Windows working copy:
+
+```text
+C:\Users\Pradeep\Documents\INNOVEX WEB\Flutter Projects\gym_management_app
+```
+
+Relevant repositories remain separate:
+
+- Gym API: `https://github.com/arafath65/gym-management-api`
+- Gym App: `https://github.com/arafath65/gym-management-apps`
+- Super Admin / master handover repository: `https://github.com/arafath65/gym-management-super-admin`
+
+The previous verified Gym App source release remains commit `38a27c9bf444c7eae51038bb59a15259098e0419` from Section 43. The 25 November QR and billing/receipt Flutter changes described below were made in the local Gym App working copy after that release. No Gym App source push was performed as part of this handover-document update. The current local Git branch/status and exact new Gym App commit SHA were not supplied after these changes; inspect `git status --short --branch` before any later source commit.
+
+The receipt work did not require a new API route, controller, database table, migration or schema change. It uses the existing membership/program billing responses and invoice balance data. Do not run a database migration merely to install these Flutter receipt changes.
+
+### 44.2 Dashboard member QR scanner shortcut
+
+The QR scanner shortcut was moved from the Member Management header to the Dashboard so staff can open member QR scanning directly from the Dashboard.
+
+Relevant Flutter files:
+
+```text
+lib/features/auth/presentation/gym_authenticated_screen.dart
+lib/features/members/presentation/member_management_screen.dart
+```
+
+Implementation recorded in the working copy:
+
+1. The Dashboard provides the QR scanner shortcut.
+2. Tapping the shortcut navigates to the Member Management section and requests that the scanner open on arrival.
+3. The Member Management screen uses the `openQrScannerOnLoad` input and `onQrScannerOpened` callback to open the scanner once and report that it has opened.
+4. The old QR camera shortcut was removed from the Member Management header to avoid duplicate entry points.
+
+Timestamped backup created for this patch:
+
+```text
+.patch-backups\dashboard_member_qr_20261125_143817_636
+```
+
+Validation reported by the user: `dart format`, targeted `flutter analyze` and `git diff --check` passed for this patch. A final emulator/device runtime confirmation of the Dashboard-to-scanner navigation was not supplied at this checkpoint; keep that live test pending.
+
+### 44.3 Individual payment receipt PDFs after successful payment
+
+Two existing billing flows now offer an individual PDF receipt after a successful payment. The payment API operation remains the source of truth; generating/sharing the PDF does not create another payment or change the ledger.
+
+#### Membership Plan payment receipt
+
+Flutter source:
+
+```text
+lib/features/members/presentation/member_membership_billing_screen.dart
+```
+
+After a membership payment succeeds, the screen prepares a PDF using the payment, invoice balance, allocation and invoice-balance information already returned by the existing API. The receipt content includes member identity, membership plan, invoice/billing period, payment receipt number/date/method/reference, invoice allocation, invoice total, payment amount, net paid and remaining balance/payment status.
+
+The user confirmed that the Membership Plan individual PDF flow worked in the app.
+
+#### Program payment receipt
+
+Flutter source:
+
+```text
+lib/features/payments/presentation/member_program_billing_dialog.dart
+```
+
+After a program installment/payment succeeds, the dialog refreshes the invoice and offers an individual program payment PDF. The receipt includes member/program/invoice details, payment receipt number/date/method/reference/status, program fee, payment amount, net paid and outstanding balance.
+
+The user confirmed that the Program individual PDF flow worked.
+
+#### Download and WhatsApp behavior
+
+The available actions are:
+
+- **Download PDF:** opens the native print/export flow; on Android, staff can choose the system Save as PDF option.
+- **Send via WhatsApp:** opens the native sharing menu with the PDF attached. Staff chooses WhatsApp, selects the member conversation and taps Send.
+
+This uses normal device sharing; there is no paid WhatsApp Business API integration and no silent/automatic message delivery. The user/staff must complete the send action in the WhatsApp share flow.
+
+The project already had `pdf` and `printing` dependencies. The implementation uses `pw.TableHelper.fromTextArray`; do not reintroduce the deprecated `pw.Table.fromTextArray` API. The prior deprecated-table cleanup removed an unnecessary `dart:typed_data` import because `flutter/services.dart` already supplied the needed `Uint8List` type in the Program Billing source.
+
+Relevant backup records supplied during this work:
+
+```text
+.patch-backups\payment_invoice_pdf_20261125_154022_382
+.patch-backups\payment_pdf_deprecation_20261125_154627_766
+```
+
+### 44.4 Payment-history multi-selection and consolidated PDF receipt
+
+The user requested selection checkboxes in both Program Billing and Membership Plan Billing, with multiple chosen payments combined into a single receipt document. The combined receipt must list the selected payment dates and amounts, show the selected total, and show the current final due/outstanding balance in red.
+
+The first multi-select patch was installed and analyzed, but the user's runtime screenshot exposed two problems: the Program checkbox was on the trailing/right side, and the generated PDF was still presenting separate per-payment receipt pages rather than one consolidated summary. The user also required voided/cancelled payment records to be non-selectable. The first implementation is superseded by the corrective work below.
+
+#### Program Billing selection behavior
+
+Source:
+
+```text
+lib/features/payments/presentation/member_program_billing_dialog.dart
+```
+
+The corrected Program payment tile places the checkbox in the leading area, before the payment receipt icon. The payment icon remains visible. Voided and cancelled records do not show a checkbox and cannot be selected. The Select All action operates only on selectable payment IDs; it does not select voided/cancelled records. Existing Void Payment action behavior is retained for eligible posted payments.
+
+Selection is tracked by payment ID. The print operation also filters the selected records through the selectable-payment predicate so a stale selection cannot cause a voided/cancelled record to be printed.
+
+#### Program Billing consolidated receipt content
+
+The corrected Program print method creates one consolidated PDF document with a payment-history table. Each selected payment is represented by a row containing:
+
+- Payment/receipt number.
+- Payment date.
+- Payment method.
+- Payment amount.
+
+The summary includes total program fee, total of the selected payments, current total net paid and final outstanding balance. The final outstanding balance is presented in a red-highlighted panel. The document identifies that the balance is the invoice ledger balance at print time. It is one combined receipt document; a long table may flow to additional PDF pages, but it does not create a separate receipt document/page for each selected payment.
+
+#### Membership Plan Billing selection behavior
+
+Source:
+
+```text
+lib/features/members/presentation/member_membership_billing_screen.dart
+```
+
+Membership invoices are displayed as expandable invoice cards (`ExpansionTile`). Payment history and its selection controls are inside the expanded invoice. Expanding an invoice invokes `_onInvoiceExpanded`, which loads that invoice's payment history through `_loadPayments(invoiceId)`. Therefore, the checkbox is not visible on the collapsed invoice card. Staff must expand the relevant invoice, load/view Payment Receipts, and select from its payment rows. `canViewPayments` must be enabled for that user.
+
+The payment-row checkbox is shown only for valid posted/non-voided/non-cancelled payment records. The Select All action only considers selectable payments. Selection keys use the invoice ID plus payment ID (`invoiceId:paymentId`) so payment IDs are unambiguously associated with their invoices. To select payments across more than one invoice, expand/load each relevant invoice and select the rows; the consolidated print method gathers the selected records from the loaded invoice payment lists.
+
+Existing refund-history, create-refund, void-payment and waiver actions remain in place. A voided/cancelled row remains visible as history but has no selection checkbox.
+
+#### Membership Plan consolidated receipt content
+
+The corrected Membership print method creates one consolidated PDF document with one selected-payment-history table. Each selected row shows receipt number, invoice number, payment date, payment method and the amount applied to the invoice. The summary includes original invoice totals for the unique selected invoices, total selected payment allocations, current net paid, posted refunds, posted waivers and final outstanding balance. The final outstanding amount is shown in a red-highlighted panel.
+
+The invoice totals/balances are aggregated once per unique invoice, even when more than one receipt from the same invoice is selected. The implementation rejects combining selected invoices with different currency codes rather than displaying a misleading mixed-currency total. Membership balances use the current invoice ledger values supplied by the existing invoice API, including posted refunds and waivers.
+
+#### Balance-date rule for both combined receipts
+
+The final outstanding balance printed by the consolidated receipt is the **current invoice balance at the time of printing**. It is not reconstructed as the balance that existed immediately after each historical payment date. The footer explains this rule. Do not describe this as a historical per-payment due balance unless the API later provides a reliable historical ledger snapshot for each payment date.
+
+### 44.5 Exact patch backups and validation evidence
+
+The user ran the patch scripts in the local Gym App project. The following timestamped backups were reported:
+
+```text
+.patch-backups\multi_select_receipt_print_20261125_171000_312
+.patch-backups\consolidated_receipt_fix_20261125_174029_979
+.patch-backups\receipt_lint_fix_20261125_174543_353
+```
+
+The `17:10` multi-select patch is the initial version and was superseded after the user reported the selection placement and PDF layout problems. The `17:40` consolidated receipt patch corrected the selection logic and PDF output. That patch passed source-anchor/in-memory validation and Dart formatting but Flutter Analyzer reported two informational `curly_braces_in_flow_control_structures` lints:
+
+- `member_membership_billing_screen.dart` around line 1804 (unbraced `if` before `continue`).
+- `member_program_billing_dialog.dart` around line 863 (unbraced `if (mounted)` error message).
+
+A lint-only repair was then applied using the `17:45` backup. It changed only those two flow-control statements by adding braces; it did not intentionally alter receipt calculations or UI behavior.
+
+The user's final validation output for the two billing files was:
+
+```text
+STEP 7: DART FORMAT
+Formatted lib\features\members\presentation\member_membership_billing_screen.dart
+Formatted 2 files (1 changed) in 0.50 seconds.
+
+STEP 8: FLUTTER ANALYZE
+Analyzing 2 items...
+No issues found! (ran in 8.9s)
+
+STEP 9: GIT DIFF CHECK
+.../member_membership_billing_screen.dart | 987 ++++++++-
+.../member_program_billing_dialog.dart    | 2244 +++++++++++++-------
+2 files changed, 2412 insertions(+), 819 deletions(-)
+
+TWO DART LINT FIXES COMPLETED
+```
+
+Therefore, the latest verified automated checks are: formatting passed; targeted Flutter analysis of these two files passed with **No issues found**; `git diff --check` passed. This was targeted analysis of the two billing files, not proof that a full-project analysis or end-to-end runtime suite passed.
+
+The reported diff is large (2,412 insertions and 819 deletions across the two files). Inspect the source diff carefully before committing the Gym App source. Do not assume the complete diff is only the intended receipt logic or that all formatting churn is harmless.
+
+### 44.6 Runtime verification still required
+
+The user has not yet supplied a post-correction runtime test or final combined PDF output. Keep the following as pending:
+
+1. In Program Billing, select two posted payments and verify the PDF contains both payment rows, their dates and amounts, one selected-payment total and the red current outstanding balance.
+2. Verify voided and cancelled Program payment rows have no checkbox and are ignored by Select All and Print Selected.
+3. Confirm the Program checkbox is on the left of the receipt icon on the actual tablet layout.
+4. In Membership Plan Billing, expand an invoice card, ensure Payment Receipts has loaded, and verify valid payment rows display checkboxes. If selecting across invoices, expand/load every invoice first.
+5. Select multiple Membership payments and verify one combined PDF contains all selected rows, does not double-count an invoice total, and shows selected payment allocation total plus posted refunds, posted waivers and red current outstanding.
+6. Verify the different-currency guard appears when selected invoices have incompatible currency codes.
+7. Test individual membership/program post-payment Download PDF and WhatsApp share actions after the combined-print changes, to ensure those existing actions remain available.
+8. Review the two-file diff and inspect `git status --short --branch` before any Gym App source commit. Keep `.patch-backups/` excluded from Git.
+
+### 44.7 Other reported Gym App follow-ups not proven complete in this checkpoint
+
+- **Member search:** A report around 22 November stated that search was showing only active members on Daily Plan while other members were not loading. No confirmed source-level fix or final retest is recorded in this checkpoint. Reproduce with multiple membership types/statuses and inspect both the Flutter search request/filters and API query before changing it.
+- **Attendance card typography:** Larger attendance text was requested (member name 14, membership details 11, check-in/out 12, status 11) while retaining the two-column tablet layout and existing actions. No completed patch/runtime verification is recorded here; inspect the current file before treating the request as done.
+- **Dashboard QR shortcut:** Source formatting/analyzer checks passed, but live Dashboard-to-scanner navigation still needs a device/emulator test as noted in Section 44.2.
+- **Combined receipts:** The latest targeted analyzer and diff checks passed, but the consolidated PDF and membership expanded-invoice checkbox flow still require the runtime tests in Section 44.6.
+
+### 44.8 GitHub publication and safe continuation rules
+
+The master handover document is maintained in the Super Admin repository at:
+
+```text
+GYM_MANAGEMENT_PROJECT_MASTER.md
+https://github.com/arafath65/gym-management-super-admin/blob/main/GYM_MANAGEMENT_PROJECT_MASTER.md
+```
+
+The 25 November document update is a documentation-only publication to the Super Admin repository. It does **not** publish the pending Gym App source changes. The Gym App receipt/QR changes must be reviewed and released separately to `gym-management-apps` after the runtime checks and explicit source-release decision.
+
+For future work:
+
+- Do not push Gym App receipt changes just because this master document is updated in the Super Admin repository.
+- Do not use `git add .`; stage explicit files and exclude `.patch-backups/`, `.env`, private media, exports and database dumps.
+- Preserve the current local billing source changes; do not reset, discard or overwrite them.
+- Do not claim end-to-end testing, production deployment or database migration for the receipt work. It is a Flutter presentation/PDF feature over the existing billing API data.
+- If the membership checkbox appears missing, first confirm the invoice is expanded, the payment history is loaded and `canViewPayments` is enabled. The checkbox belongs to the individual payment history row, not the collapsed invoice header.
+
+### 44.9 Exact continuation point — 25 November 2026
+
+- Dashboard QR scanning shortcut: implemented in the local Gym App working copy; targeted format/analyze/diff checks passed; runtime navigation confirmation remains pending.
+- Membership Plan individual payment PDF: implemented and user-confirmed working.
+- Program individual payment PDF: implemented and user-confirmed working.
+- Program and Membership payment-history multi-selection: corrected in the local Gym App source; voided/cancelled rows are excluded from selection; one combined PDF summarizes all selected payment rows and shows the current outstanding balance in red.
+- The two billing files passed Dart formatting, targeted Flutter Analyzer with no issues, and `git diff --check` after the final brace-only lint repair.
+- Runtime verification of the corrected combined receipt output and expanded Membership invoice selection is still pending.
+- The 25 November Gym App source changes have not been reported as pushed. Last verified Gym App GitHub source release remains Section 43's commit `38a27c9bf444c7eae51038bb59a15259098e0419` until a later source commit is confirmed.
+- Member search and attendance typography follow-ups remain unverified/pending as described in Section 44.7.
+
+**End of current authoritative master handover document (25 November 2026, Section 44).**
