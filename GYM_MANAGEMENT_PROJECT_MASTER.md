@@ -5421,7 +5421,7 @@ GYM_MANAGEMENT_PROJECT_MASTER.md
 https://github.com/arafath65/gym-management-super-admin/blob/main/GYM_MANAGEMENT_PROJECT_MASTER.md
 ```
 
-The 25 November document update is a documentation-only publication to the Super Admin repository. It does **not** publish the pending Gym App source changes. The Gym App receipt/QR changes must be reviewed and released separately to `gym-management-apps` after the runtime checks and explicit source-release decision.
+The 25 November document update itself was a documentation-only publication to the Super Admin repository; it did not publish application source changes. The subsequent API and Gym App source publications are recorded in Section 44.10 below. The Gym App consolidated receipt changes still require the runtime checks listed in Section 44.6; publication to GitHub does not mean those checks have passed.
 
 For future work:
 
@@ -5439,7 +5439,53 @@ For future work:
 - Program and Membership payment-history multi-selection: corrected in the local Gym App source; voided/cancelled rows are excluded from selection; one combined PDF summarizes all selected payment rows and shows the current outstanding balance in red.
 - The two billing files passed Dart formatting, targeted Flutter Analyzer with no issues, and `git diff --check` after the final brace-only lint repair.
 - Runtime verification of the corrected combined receipt output and expanded Membership invoice selection is still pending.
-- The 25 November Gym App source changes have not been reported as pushed. Last verified Gym App GitHub source release remains Section 43's commit `38a27c9bf444c7eae51038bb59a15259098e0419` until a later source commit is confirmed.
+- At the time this Section 44.9 checkpoint was first recorded, the 25 November Gym App source changes had not yet been reported as pushed. That publication status was superseded by the verified API and Gym App pushes recorded in Section 44.10.
 - Member search and attendance typography follow-ups remain unverified/pending as described in Section 44.7.
 
-**End of current authoritative master handover document (25 November 2026, Section 44).**
+### 44.10 GitHub source publication results — 25 November 2026
+
+The user ran the explicit-file PowerShell publication workflow from the Windows working copy. Both application repositories were pushed to their `main` branches and the local script verified that each remote `refs/heads/main` matched the local `HEAD`.
+
+#### Gym Management API
+
+Repository:
+`https://github.com/arafath65/gym-management-api`
+
+- Previous verified remote main: `0cf3b4d0c72350518e16016ef9e7f52f3ed8dcd3`
+- Published commit: `00baddafbb74fe625f357eb8268a45730c1c5e6e`
+- Commit message: `feat(api): add attendance checkout and dashboard updates`
+- Files included:
+  - `src/controllers/dashboardController.js`
+  - `src/controllers/memberAttendanceController.js`
+  - `src/routes/attendanceRoutes.js`
+  - `scripts/migrateAttendanceCheckout.js`
+- Push result: successful; GitHub remote commit was verified against local `HEAD`.
+
+#### Gym Management App
+
+Repository:
+`https://github.com/arafath65/gym-management-apps`
+
+- Previous verified remote main: `38a27c9bf444c7eae51038bb59a15259098e0419`
+- Published commit: `2f17b78668bffad39354c8455a6a7d01cc9d333c`
+- Commit message: `feat(app): update attendance and payment receipt workflows`
+- Explicitly approved files included:
+  - `android/app/src/main/AndroidManifest.xml`
+  - `ios/Runner/Info.plist`
+  - `lib/features/attendance/data/attendance_service.dart`
+  - `lib/features/attendance/presentation/attendance_screen.dart`
+  - `lib/features/members/data/member_service.dart`
+  - `macos/Flutter/GeneratedPluginRegistrant.swift`
+  - `pubspec.lock`
+  - `pubspec.yaml`
+  - `lib/features/payments/presentation/member_program_billing_dialog.dart`
+  - `lib/features/members/presentation/member_membership_billing_screen.dart`
+  - `lib/features/members/presentation/member_management_screen.dart`
+  - `lib/features/auth/presentation/gym_authenticated_screen.dart`
+- Push result: successful; GitHub remote commit was verified against local `HEAD`.
+
+The scripts excluded `.patch-backups/` and stopped when they encountered unapproved files. No claim is made here that the updated attendance flows or consolidated receipt PDFs have passed device/emulator runtime testing. The pending runtime checks in Section 44.6 remain applicable.
+
+The API and Gym App source repositories are now published through the commits above. The Super Admin repository's master handover remains a separate documentation repository; its own application source was not part of these two pushes.
+
+**End of current authoritative master handover document (25 November 2026, Section 44.10).**
