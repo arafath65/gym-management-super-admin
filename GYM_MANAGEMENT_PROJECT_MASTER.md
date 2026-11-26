@@ -1,7 +1,7 @@
 # GYM MANAGEMENT PROJECT MASTER
 
 **Technical handover and continuation reference**
-**Last updated:** 26 November 2026 (Sections 44–45 responsive Flutter work; Section 46 Contabo VPS infrastructure checkpoint)
+**Last updated:** 26 November 2026 (Sections 44–45 responsive Gym App work; Section 46 initial Contabo setup; Section 47 current source-publication and VPS deployment checkpoint)
 **Project owner / development context:** Innovex Fitness Center / Innovex Web Solutions
 **Primary development environment:** Windows, PowerShell, Flutter, Node.js and MySQL 8. The active PowerShell project paths explicitly confirmed during the 20 November continuation are `D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_api` and `D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_app`. Earlier office-laptop paths and GitHub release checkpoints in Sections 31, 33 and 35 are historical records; verify the current machine, branch and working-tree state before any Git operation.
 
@@ -40,7 +40,7 @@ The original design considered an organization/tenant with multiple branches. Th
 - Node.js **v24.20.0**.
 - npm **v11.19.0**.
 - Express.js.
-- MySQL **8.0.x** (office environment reported 8.0.39 in earlier setup notes).
+- Development/office database baseline: MySQL **8.0.x** (office environment reported 8.0.39 in earlier setup notes). The Contabo VPS database container is now MySQL **8.4.13** (image tag `mysql:8.4.13.1`); verify all API queries, migrations and seed scripts against this production database version before application deployment.
 - `mysql2` promise API for database access (`db.query`, `db.getConnection`).
 - `dotenv` for environment configuration.
 - `cors` and `express.json()` in the Express server.
@@ -5799,7 +5799,7 @@ Do not reset, discard or overwrite the user's existing local source changes. The
 
 ## 46. Contabo VPS Infrastructure Setup — Gym Management Hosting Checkpoint (26 November 2026)
 
-This section records the initial infrastructure preparation for hosting the Innovex Gym Management System on the Contabo VPS. It documents the server foundation and current deployment state only. The Gym Management API, production database and application services have **not yet been deployed**.
+This section preserves the original Contabo infrastructure baseline and setup decisions from 26 November 2026. The live follow-up state changed later on the same date: Caddy and the MySQL 8.4 database container were started and verified, while the Gym Management API itself remains undeployed. **Section 47 is the latest authoritative continuation point** and supersedes outdated pending-step statements in Section 46.10.
 
 ### 46.1 Hosting objective and selected architecture
 
@@ -5811,13 +5811,13 @@ Planned architecture:
 - Docker Engine and Docker Compose for application/service isolation.
 - Caddy as the public reverse proxy and HTTPS certificate manager, accepting public web traffic on ports 80 and 443.
 - Gym Management API as a Node.js/Express container.
-- MySQL 8 as a persistent database container on a private Docker network.
+- MySQL 8.4 LTS as a persistent database container on a private internal Docker network (the prepared Contabo instance reports MySQL 8.4.13).
 - The intended Gym database name is `gym_management_db`.
 - Flutter Gym App and Super Admin applications remain client applications; their API connections will use the public HTTPS API hostname after DNS/TLS are configured.
 - Cockpit is the Ubuntu administration dashboard.
 - Portainer CE is installed as an optional Docker GUI, but its local Docker environment currently fails to connect. Docker Compose CLI is the reliable management path until that issue is resolved.
 - phpMyAdmin may be added later for database administration, but only through private access/SSH tunneling.
-- Future Innovex applications may be hosted as separate Compose projects after the Gym deployment requirements and resource limits are reviewed. Do not combine unrelated application databases or secrets in one Compose environment.
+- Current deployment scope is limited to the Gym Management API and its Flutter client. A&I Workflow, Innovex website and Ecommerce deployments are deferred until the Gym service is deployed and verified. Do not combine unrelated application databases or secrets in one Compose environment.
 
 ### 46.2 VPS hardware and operating system
 
@@ -6061,9 +6061,9 @@ No public UFW allow rules were added for Cockpit `9090`, Portainer `9443`, or My
 - Review Docker forwarding/`DOCKER-USER` behavior before publishing any application container ports.
 - The intended public web entry point is Caddy on ports `80` and `443`.
 
-### 46.10 Exact continuation point — resume here
+### 46.10 Initial continuation point (historical; superseded by Section 47)
 
-**Current confirmed position (26 November 2026):** Ubuntu, Cockpit, Docker Engine, Docker Compose, Portainer and UFW have been prepared. The user paused before the fresh SSH verification following UFW activation. No Gym Management API container, MySQL 8 container, Caddy proxy or production Gym database has been deployed yet.
+**Historical note:** The following was the initial pause point before the subsequent work recorded in Section 47. It is retained as a record of the original setup sequence, not as the current VPS status. In particular, the directory structure, Docker networks, Caddy container and MySQL container have since been created and verified. Follow Section 47 for the current continuation steps.
 
 Resume in this exact order:
 
@@ -6126,7 +6126,297 @@ Resume in this exact order:
 - Keep MySQL private on Docker networks; do not expose `3306` publicly.
 - Do not add public application ports until Docker/UFW behavior has been reviewed.
 - Preserve the dpkg and BIND recovery archives until a separate retention decision is made.
-- The infrastructure is a prepared foundation only. Do not describe the Gym API or production database as deployed until their containers and application health have actually been verified.
+- The Gym Management API application remains undeployed at the Section 47 checkpoint. The MySQL service container is deployed and healthy, but the Gym schema migrations/application tables have not yet been run. Do not describe the API as production-deployed until its container, health endpoint, database integration and HTTPS route have been verified.
 
+---
 
-**End of current authoritative master handover document (26 November 2026, Section 46).**
+## 47. Current Source Publication and Contabo Gym API Deployment Checkpoint — 26 November 2026
+
+This section is the latest authoritative handover checkpoint. It supersedes earlier pending/current-state statements in Sections 45.6 and 46.10 where those sections predate the source publication and infrastructure work below. Only verified results are recorded as completed. The current deployment scope is the Gym Management API and Gym Flutter App; other Innovex applications are deferred.
+
+### 47.1 Current project scope, repositories and local paths
+
+Current Windows development root:
+
+D:\Personal\INNOVEX WEB\Flutter Projects
+
+| Project | Local path | GitHub repository | Current verified state |
+|---|---|---|---|
+| Gym Management API | D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_api | https://github.com/arafath65/gym-management-api | main is synchronized with origin/main at 00badda; no API push pending |
+| Gym Management App (Flutter) | D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_app | https://github.com/arafath65/gym-management-apps | New responsive changes pushed in commit 1a33909 |
+| Gym Super Admin App | D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_super_admin | https://github.com/arafath65/gym-management-super-admin | This repository also stores this master document; no Super Admin app source release was part of this checkpoint |
+
+The user explicitly narrowed the current hosting and source-publication work to the Gym Management API and Gym Management App. A&I Global Client Workflow System, Innovex website and Ecommerce deployment are postponed. Any previously created future-app directory scaffolding is not evidence that those applications are deployed.
+
+### 47.2 Gym Management Flutter App — validation and GitHub publication
+
+Repository: https://github.com/arafath65/gym-management-apps  
+Branch: main  
+Local path: D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_app
+
+Successful publication:
+
+- Commit: 1a33909
+- Commit message: feat(app): improve responsive gym management screens
+- Previous remote commit: 2f17b78
+- Push output confirmed main moved from 2f17b78 to 1a33909.
+- GitHub commit: https://github.com/arafath65/gym-management-apps/commit/1a33909
+
+The commit contained 17 file changes: two new responsive layout foundation files, one new responsive breakpoint test, modified Gym App screens, and deletion of two obsolete tracked membership-plan screen backup files. The new responsive files are:
+
+- lib/core/responsive/app_breakpoints.dart
+- lib/core/responsive/responsive_layout.dart
+- test/core/responsive/app_breakpoints_test.dart
+
+The modified screen areas included Attendance, Audit Logs, authenticated layout, Branches, Devices, Members, Membership Plans, Payments, Roles & Permissions, Splash, Staff and Trainers.
+
+Validation recorded before the commit:
+
+- flutter analyze completed with no errors and two informational lint suggestions in lib/features/membership_plans/presentation/membership_plans_screen.dart at lines 670 and 700 (use_null_aware_elements).
+- flutter test passed all 8 tests.
+- Staged whitespace validation completed with no findings using Git's CRLF-aware check.
+- A basic staged-diff scan found no matches for common private-key/GitHub-token/cloud-key patterns. This was a limited pattern scan, not a guarantee that every possible secret type was absent.
+- macos/Flutter/GeneratedPluginRegistrant.swift was not staged.
+- Local-only untracked items such as .patch-backups/, lib.zip, and pubspec backup files were not included in the commit.
+
+The push was confirmed by the user's PowerShell output. Do not repeat the same Flutter commit or assume the user's current working tree has no new changes; inspect status before a later release.
+
+### 47.3 Gym Management API — repository synchronization and archive decision
+
+Repository: https://github.com/arafath65/gym-management-api  
+Branch: main  
+Local path: D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_api
+
+After running git fetch origin, the user ran:
+
+git rev-list --left-right --count origin/main...main
+
+The output was 0 0. This confirms the local main and origin/main refs were synchronized at that check. The latest commit shown in both refs was:
+
+- 00badda — feat(api): add attendance checkout and dashboard updates
+
+The API working tree had no modified tracked source files in the recorded status. It contained untracked local backup material, .patch-backups/, and src.zip. Those items were not committed or pushed.
+
+#### src.zip comparison — do not restore it over the API repository
+
+The user compared the 89 entries in local src.zip against the current API project without extracting over or modifying the project:
+
+| ZIP comparison result | Count |
+|---|---:|
+| Identical to local project files | 60 |
+| Backup files to exclude | 13 |
+| Different source files requiring review | 9 |
+
+The nine different source files were:
+
+- src/controllers/memberBillingCollectionsController.js
+- src/controllers/memberMembershipController.js
+- src/controllers/memberMembershipInvoiceController.js
+- src/controllers/memberProgramController.js
+- src/controllers/membershipPlanController.js
+- src/routes/memberBillingRoutes.js
+- src/routes/memberProgramRoutes.js
+- src/routes/membershipPlanRoutes.js
+- src/server.js
+
+The uploaded source comparison report showed that the ZIP version removes or lacks functionality present in the current local/GitHub source, including attendance-based membership billing and attendance invoice generation, unified membership/program catalog support, program assignment billing/report behavior, and program pause/resume preview, extension decision and pause-history behavior. Therefore:
+
+- Do not extract src.zip over the current API project.
+- Do not copy the nine ZIP versions over the current source files.
+- Keep src.zip and backup files out of GitHub.
+- Treat the already synchronized GitHub main commit 00badda as the current source baseline for deployment unless a later code review identifies a specific defect requiring a new commit.
+- The temporary diff report was a review artifact, not an API source release.
+
+Current API package manifest inspected from GitHub listed dependencies including Express 5, mysql2, dotenv, bcrypt, cors, jsonwebtoken, multer and sharp. Recheck the actual checked-out package.json and lockfile during deployment and build the image from the repository, not from src.zip.
+
+### 47.4 Contabo VPS — directory structure created
+
+The user confirmed the following directory trees exist.
+
+Application and deployment/configuration root:
+
+- /opt/innovex/
+- /opt/innovex/infrastructure/caddy/
+- /opt/innovex/infrastructure/caddy/conf/
+- /opt/innovex/infrastructure/mysql/
+- /opt/innovex/infrastructure/mysql/init/
+- /opt/innovex/infrastructure/portainer/
+- /opt/innovex/infrastructure/docker/
+- /opt/innovex/apps/gym-management/api/
+- /opt/innovex/apps/nextjs/ (future scaffolding only; no Next.js services are in current scope)
+- /opt/innovex/deployments/
+- /opt/innovex/scripts/
+
+The /opt/innovex application/configuration directories are owned by ubuntu:ubuntu with mode 0750.
+
+Persistent storage directories created:
+
+- /srv/innovex/database/mysql/data/
+- /srv/innovex/backups/mysql/
+- /srv/innovex/caddy/data/
+- /srv/innovex/caddy/config/
+- /srv/innovex/storage/gym-management/
+- /srv/innovex/storage/ai-global-workflow/
+- /srv/innovex/storage/innovex-web/
+- /srv/innovex/storage/ecommerce/
+
+The /srv/innovex tree is owned by root:root with mode 0750. Future-app storage directories exist as scaffolding only; do not deploy those applications in the current Gym-only phase.
+
+### 47.5 Docker networks
+
+Two Docker networks have been created and inspected:
+
+| Network | Driver | Internal | Purpose |
+|---|---|---|---|
+| innovex_proxy | bridge | false | Shared network for Caddy and application containers |
+| innovex_db | bridge | true | Private internal network for the Gym API and MySQL |
+
+The MySQL container was inspected and confirmed as a member of innovex_db. Its dynamic container IP was 172.20.0.2 at that inspection; do not hardcode this IP into application configuration. Use a stable Docker DNS service/container alias after verifying the Compose network aliases.
+
+### 47.6 Caddy reverse proxy — running in temporary HTTP-only mode
+
+Compose file:
+
+/opt/innovex/infrastructure/caddy/compose.yaml
+
+Caddy configuration:
+
+/opt/innovex/infrastructure/caddy/conf/Caddyfile
+
+Persistent host paths:
+
+- /srv/innovex/caddy/data
+- /srv/innovex/caddy/config
+
+Verified Caddy state:
+
+- Container name: innovex-caddy.
+- Image: caddy:2.11.9-alpine.
+- Container started successfully and was shown running in docker ps.
+- Connected to the external Docker network innovex_proxy.
+- Host publishes TCP 80, TCP 443 and UDP 443 (HTTP/3) on the public host interfaces.
+- Local HTTP request to http://127.0.0.1/ returned HTTP/1.1 200 OK and the temporary response: “Innovex reverse proxy is running. Application routes will be configured after DNS setup.”
+- Caddy logs confirm the configuration was loaded and the server is running.
+
+Important current limitations:
+
+- The Caddyfile currently defines only a temporary HTTP listener on port 80.
+- Automatic HTTPS has not yet been configured for the Gym hostname.
+- No production certificate has been issued.
+- No Gym API reverse-proxy route has been added.
+- Caddy logged the expected warning that automatic HTTPS is not applied to the HTTP-only server. This is intentional until DNS is configured.
+- A Caddyfile formatting warning was observed; it did not prevent startup.
+
+Do not describe the API hostname as live until DNS, TLS certificate issuance, reverse proxy routing and API health checks succeed.
+
+### 47.7 DNS and Innovex domain support ticket
+
+The user confirmed the Innovex domain is:
+
+https://www.innovexweb.lk/
+
+The domain was purchased through Ceylon Servers. The user could not locate a DNS management panel and submitted a support ticket asking Ceylon Servers to add an A record for:
+
+- Record type: A
+- Host/name: gym-api
+- Intended hostname: gym-api.innovexweb.lk
+- Destination: the user's Contabo VPS IPv4 address (intentionally not copied into this public-facing technical handover)
+- Request explicitly says not to modify existing root-domain, www, email or current website hosting records.
+
+At this checkpoint, the support ticket has been submitted but no reply or DNS change has been confirmed. Do not change nameservers or existing www/root DNS records without Ceylon Servers' guidance and explicit review.
+
+Proposed production Flutter API base URL, pending actual API route-prefix verification:
+
+https://gym-api.innovexweb.lk/api
+
+Treat this as provisional until the API's real mounted route prefixes are checked.
+
+### 47.8 MySQL 8.4 — Gym database container deployed and verified
+
+Compose directory/file:
+
+/opt/innovex/infrastructure/mysql/compose.yaml
+
+Container:
+
+- Name: innovex-gym-mysql.
+- Image tag: mysql:8.4.13.1.
+- Server version reported in logs and SQL: 8.4.13.
+- Container status: running.
+- Docker health status: healthy.
+- Persistent data bind mount: /srv/innovex/database/mysql/data to /var/lib/mysql.
+- Docker network: innovex_db (internal bridge).
+- Host port bindings: {}.
+- docker port innovex-gym-mysql returned no published host ports. MySQL is not published to the public internet.
+
+Database initialization:
+
+- Database created: gym_management_db.
+- Application account created: gym_app.
+- The user verified root authentication successfully; SELECT VERSION()/CURRENT_USER() returned 8.4.13 and root@localhost.
+- The user verified application authentication successfully; the current database was gym_management_db and CURRENT_USER() returned gym_app@%.
+- SHOW GRANTS confirmed USAGE on *.* and ALL PRIVILEGES on gym_management_db.* for gym_app. The application account was not granted global administrative privileges.
+- MySQL initialization logs confirmed database and account creation and server readiness on container port 3306.
+
+Secret files (never record or display the values):
+
+- /etc/innovex/mysql/secrets/mysql_root_password
+- /etc/innovex/mysql/secrets/gym_db_password
+
+Both files were verified as root:root with mode 0600. Passwords were generated with openssl rand -hex 32; each file was 65 bytes (64 hex characters plus newline). They are supplied to Compose as file-backed secrets rather than literal values in the Compose YAML.
+
+The initialization logs included the official image bootstrap message that root@localhost was temporarily initialized with an empty password during the initialize-insecure phase. The subsequent container initialization applied the configured root password, and the user's root login test passed. Do not treat the bootstrap warning alone as evidence that the running database has an empty root password.
+
+**Database scope qualification:** The database and application account exist and authenticate, but the Gym API schema migrations/application tables have not yet been run. No API migration or seed command has been executed on this VPS. Do not import the local source ZIP or guess the schema initialization procedure.
+
+### 47.9 Current firewall, SSH and administration service status
+
+UFW was confirmed active earlier with:
+- TCP 22 for SSH.
+- TCP 80 for HTTP.
+- TCP 443 for HTTPS.
+- IPv4 and IPv6 rules.
+- Default inbound deny, outbound allow and routed deny.
+
+No public allow rule exists for MySQL 3306, Cockpit 9090 or Portainer 9443. Docker-published port handling can bypass ordinary UFW rules; preserve private binding/no-public-port rules for databases and administration dashboards.
+
+SSH remains key-only for the ubuntu user with root login and SSH password authentication disabled. During this follow-up, the SSH client once reported “client_loop: send disconnect: Connection reset.” The server's ssh service was still active and a later public-key authentication from the user's expected key fingerprint succeeded. No evidence in the supplied log excerpt established that sshd or the VPS had restarted. For subsequent Windows PowerShell sessions, the user was advised to use SSH keepalive options (ServerAliveInterval 30 and ServerAliveCountMax 3). Do not alter the firewall or reboot merely for an intermittent client-side reset without fresh diagnostics.
+
+Portainer remains optional:
+- Container: portainer.
+- Host binding: 127.0.0.1:9443.
+- Persistent volume: portainer_data.
+- User completed initial administrator setup.
+- Portainer's local Docker environment still showed “We could not connect your local environment to Portainer.”
+- Direct host Docker socket ping returned OK. The issue is unresolved; continue using Docker Compose CLI and preserve the existing Portainer data volume.
+Cockpit must also remain private and be accessed by SSH tunnel.
+
+### 47.10 Deployment continuation — exact next actions
+
+The current deployed services are Caddy (temporary HTTP response only) and MySQL 8.4 (healthy, empty Gym schema). The Gym Management API is not yet cloned onto the VPS, built or started.
+
+Proceed in this order:
+
+1. Check the target application directory /opt/innovex/apps/gym-management/api/ before cloning. Confirm it is empty or otherwise preserve its contents. Clone the verified GitHub repository https://github.com/arafath65/gym-management-api at main, currently synchronized at commit 00badda. Do not use src.zip.
+2. Inspect the checked-out package.json, lockfile, src/server.js, src/config/db.js, route mounts, health endpoint, environment-variable names, any SQL/migration scripts and any database bootstrap/seed scripts. Verify Node version/runtime and actual PORT and database environment names from source. Do not assume the local-development .env is present or copy local secrets.
+3. Before schema changes, verify the new database is empty and prepare a backup/restore approach. Identify the API's supported migration/schema initialization process from the repository. Run only the repository's verified migrations/scripts against gym_management_db; do not invent table DDL or run a destructive reset.
+4. Prepare a production Dockerfile and Compose service for the API after source review. The API service must join both innovex_proxy and innovex_db. MySQL must remain on innovex_db only. Do not publish MySQL port 3306.
+5. Put production environment values in a protected, untracked server-side location such as /etc/innovex/gym-api/ with strict ownership/permissions. The API's DB host must resolve to the MySQL Docker service/container alias on innovex_db, not localhost. Do not put passwords or secrets in Git, Flutter source or this master file.
+6. Configure Caddy to proxy the confirmed Gym API hostname to the API container's internal listening port after DNS is ready. Do not guess PORT; verify PORT/default from server.js.
+7. Follow up with Ceylon Servers. Once the A record has been added, verify the DNS answer from an independent resolver and confirm it points to the intended Contabo VPS before configuring the Caddy site address and enabling public automatic HTTPS.
+8. Test local container-to-database connectivity, API health endpoint, API authentication, key gym workflows and organization/branch boundaries. Verify logs for errors. Test the public HTTPS API endpoint only after DNS and TLS are working.
+9. Update the Flutter Gym App API base URL only after the production hostname and actual API route prefix are verified. Keep the Super Admin app's environment/base URL separate and confirm its routing requirements before changing it.
+10. Configure database backup automation and test a restore before treating the VPS as production-ready. Verify containers restart after VPS reboot and that MySQL data persists.
+11. Keep the other Innovex applications postponed. Do not spend time troubleshooting Portainer unless the user explicitly prioritizes its GUI over the Compose CLI path.
+
+### 47.11 Handover and security rules
+
+- Latest Gym Flutter App GitHub source commit: 1a33909, repository arafath65/gym-management-apps, branch main.
+- Latest verified Gym API GitHub source commit: 00badda, repository arafath65/gym-management-api, branch main; local and remote were synchronized at the recorded check.
+- The GitHub master file is maintained in arafath65/gym-management-super-admin. This Section 47 is documentation only and does not deploy API source.
+- Keep database secrets, SSH private keys, access tokens, production environment files, member photographs and database backups out of GitHub and out of this document.
+- Do not publicly expose MySQL, Cockpit or Portainer.
+- Do not claim API deployment, schema migration, DNS completion, HTTPS completion or production readiness until each has been individually verified.
+- Preserve existing package-recovery archives and Portainer data.
+
+**End of current authoritative master handover document (26 November 2026, Section 47).**
