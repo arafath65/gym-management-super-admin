@@ -1,7 +1,7 @@
 # GYM MANAGEMENT PROJECT MASTER
 
 **Technical handover and continuation reference**
-**Last updated:** 26 November 2026 (Sections 44–45 responsive Gym App work; Section 46 initial Contabo setup; Section 47 current source-publication and VPS deployment checkpoint)
+**Last updated:** 26 November 2026 (Sections 44–45 responsive Gym App work; Section 46 initial Contabo setup; Section 47 initial VPS checkpoint; Section 48 verified API deployment, backup automation and phpMyAdmin administration)
 **Project owner / development context:** Innovex Fitness Center / Innovex Web Solutions
 **Primary development environment:** Windows, PowerShell, Flutter, Node.js and MySQL 8. The active PowerShell project paths explicitly confirmed during the 20 November continuation are `D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_api` and `D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_app`. Earlier office-laptop paths and GitHub release checkpoints in Sections 31, 33 and 35 are historical records; verify the current machine, branch and working-tree state before any Git operation.
 
@@ -997,8 +997,7 @@ This was an earlier Java activity-level implementation/prototype. It is not evid
 
 Confirmed requirement examples:
 
-- Time-bound fitness programs such as a **60-day weight-loss program**.- Members should be enrolled in programs.
-- Program duration, enrollment dates, program status, and member results should be managed.
+- Time-bound fitness programs such as a **60-day weight-loss program**.- Members should be enrolled in programs.- Program duration, enrollment dates, program status, and member results should be managed.
 
 No final program tables, APIs, Flutter screens or complete enrollment workflows were confirmed in the current conversation. Do not claim these are implemented.
 
@@ -1997,8 +1996,7 @@ The Fitness Mania organization shown during the UI verification had no branches 
 ### 30.3 Gym Owner account lookup API
 
 The broad onboarding-report endpoint and its UI (permissions, branches, branch access and onboarding history) were removed from the Edit Organization workflow. The focused read endpoint is:
-| Method | Endpoint | Required Platform Admin permission | Response data |
-|---|---|---|---|
+| Method | Endpoint | Required Platform Admin permission | Response data ||---|---|---|---|
 | GET | `/api/organizations/:organizationId/gym-owner` | `organizations.view` | Gym Owner ID, name and login email; no password fields |
 
 The route is behind `authenticatePlatformAdmin`. The controller selects the organization-scoped user assigned to the system `Gym Admin` role. It does not select or return `password_hash`.
@@ -2997,8 +2995,7 @@ Backend change in `src/controllers/gymStaffController.js`:
 Flutter change in `lib/features/staff/presentation/staff_management_screen.dart`:
 - `StaffManagementScreen` now receives `activeBranchId` from the authenticated parent screen.
 - `didUpdateWidget` detects an active-branch change, resets the page to page 1, clears the expanded staff row/card and reloads the staff list.
-- The active branch property is a UI refresh trigger. The actual API branch scope is still derived by the backend from the current Gym Staff JWT.
-- This resolves the stale-list behavior where the parent session changed but the existing StatefulWidget retained its previous state and only loaded staff in `initState`.
+- The active branch property is a UI refresh trigger. The actual API branch scope is still derived by the backend from the current Gym Staff JWT.- This resolves the stale-list behavior where the parent session changed but the existing StatefulWidget retained its previous state and only loaded staff in `initState`.
 
 The main authenticated screen passes the current active branch from its refreshed session into Staff Management.
 
@@ -3997,8 +3994,7 @@ Implemented behavior:
 - Four compact summary cards: active memberships, total billed, total collected and outstanding.
 - Automatic member type-ahead search with a 350 ms debounce and a two-character minimum.
 - The selected-member flow requests `status: 'active'` and also verifies current start/end dates. It excludes non-current and ended participant associations according to the current API status response.
-- Selected member's active memberships are displayed for invoice/payment follow-up.
-- Membership plan selector loads active plans; selecting a plan loads a server-paginated collection table.
+- Selected member's active memberships are displayed for invoice/payment follow-up.- Membership plan selector loads active plans; selecting a plan loads a server-paginated collection table.
 - The seven columns are Member, Plan/Period, Fee, Billed, Net Paid, Outstanding and Next Due.
 - The collection table is wrapped in a responsive layout with a minimum width of 1080 logical pixels. On wider tablet layouts it expands to the available width; on narrower layouts horizontal scrolling is retained.
 - Member search results show the member's original registration branch name/code returned by the billing API, with a branch-ID fallback.
@@ -4998,7 +4994,6 @@ The GitHub repositories are independent:
 - Master handover: https://github.com/arafath65/gym-management-super-admin/blob/main/GYM_MANAGEMENT_PROJECT_MASTER.md
 
 Remote main heads inspected on 23 November 2026:
-
 | Repository | Remote main commit at inspection |
 |---|---|
 | gym-management-api | 3f5a3780fab8f171438941f8579dc687097133c2 |
@@ -5998,7 +5993,6 @@ Confirmed Portainer state:
 Do not record the Portainer administrator password or temporary setup token.
 
 ### 46.8 Portainer local Docker environment connection issue — unresolved
-
 After the initial wizard reported the local environment connected, the user selected **Get Started**. Portainer then displayed:
 
 ```text
@@ -6419,4 +6413,170 @@ Proceed in this order:
 - Do not claim API deployment, schema migration, DNS completion, HTTPS completion or production readiness until each has been individually verified.
 - Preserve existing package-recovery archives and Portainer data.
 
-**End of current authoritative master handover document (26 November 2026, Section 47).**
+## 48. Verified VPS deployment, backup automation and database administration — 26 November 2026
+
+This section records only actions that were completed and positively verified during the 26 November 2026 VPS administration session. It supersedes earlier Section 47 statements where the deployment state had not yet been completed. Failed attempts and uncompleted DNS/Cloudflare work are intentionally not recorded as completed achievements.
+
+### 48.1 VPS and deployed Gym API
+
+- VPS public IPv4: `169.58.186.14`.
+- Hostname: `vmi3776623`.
+- OS: Ubuntu 24.04.5 LTS.
+- SSH administration uses the `ubuntu` account and the user's existing Ed25519 private key from Windows PowerShell.
+- Gym API repository: `https://github.com/arafath65/gym-management-api.git`.
+- API source directory: `/opt/innovex/apps/gym-management/api`.
+- Running API container: `innovex-gym-api`.
+- API image: `innovex/gym-management-api:1.0.0`.
+- API internal listening port: `5000`; no public host port is published directly for the API container.
+- API is attached to `innovex_db` and `innovex_proxy` Docker networks.
+- Persistent upload storage is mounted from `/srv/innovex/storage/gym-management/uploads` to `/app/uploads`.
+- The API health endpoint was successfully tested and returned `{"success":true,"api":"connected","database":"connected"}`.
+- The Gym API successfully connects to the deployed MySQL database.
+
+### 48.2 MySQL database deployment
+
+- Running database container: `innovex-gym-mysql`.
+- Image: `mysql:8.4.13.1` (MySQL Server 8.4.13).
+- Database: `gym_management_db`.
+- Application account: `gym_app`.
+- Persistent data path: `/srv/innovex/database/mysql/data` mounted to `/var/lib/mysql`.
+- MySQL is attached to the private internal Docker network `innovex_db` only.
+- MySQL port 3306 is not published on the VPS host and must remain private.
+- The `gym_app` account has privileges on `gym_management_db` and is kept separate from the administrative account.
+- MySQL root and application passwords are stored in protected server-side secret files. Never copy their values into this document, GitHub, Flutter source or chat.
+
+### 48.3 Separate MySQL administrator account for developer use
+
+A dedicated database administrator account was created and successfully authenticated:
+
+- MySQL username: `innovex_dba`.
+- Host scope: `%` (reachable from the MySQL Docker network; do not expose MySQL publicly).
+- Privileges: global `ALL PRIVILEGES` with `GRANT OPTION`.
+- The account was tested successfully using the saved password and MySQL returned the account identity/grants.
+- Password file: `/etc/innovex/mysql/secrets/innovex_dba_password`.
+- The password was generated on the VPS and saved with restrictive root-only permissions. Its value is intentionally not recorded here.
+- The existing `gym_app` account and its password were not changed when the administrator account was created.
+
+Use `innovex_dba` for developer database administration in phpMyAdmin. Keep `gym_app` as the least-privilege application account for the Gym API. Do not put the DBA password in Compose environment literals or source control.
+
+### 48.4 phpMyAdmin deployment and access
+
+- phpMyAdmin is deployed as a Docker container named `innovex-phpmyadmin` using image `phpmyadmin:5.2.3-apache`.
+- Compose directory: `/opt/innovex/infrastructure/phpmyadmin/`.
+- Compose file: `/opt/innovex/infrastructure/phpmyadmin/compose.yaml`.
+- Container connects to `innovex_db` for MySQL access and `innovex_phpmyadmin_access` for host-side loopback publishing.
+- Host binding is restricted to `127.0.0.1:8081` mapped to container port 80. It is not publicly exposed.
+- phpMyAdmin's custom configuration file is mounted read-only from `/etc/innovex/phpmyadmin/config.user.inc.php`.
+- The configuration file is owned by `root:www-data` with mode `0640`; the generated blowfish secret is not recorded in this document.
+- The user successfully opened phpMyAdmin through an SSH tunnel to `localhost:8081` and logged in using the MySQL application account, confirming access to `gym_management_db` data.
+- The user then created and successfully verified the `innovex_dba` account. Use this account in phpMyAdmin for full database administration.
+- No UFW rule or public Docker port was added for phpMyAdmin. Continue accessing it through the SSH tunnel only.
+
+Windows PowerShell SSH tunnel command:
+
+```powershell
+ssh -i "$env:USERPROFILE\.ssh\innovex_vps_ed25519" -L 8081:127.0.0.1:8081 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 ubuntu@169.58.186.14
+```
+
+Keep the SSH tunnel terminal open while using `http://localhost:8081` in the browser. Do not publish phpMyAdmin through Caddy or expose port 8081 publicly.
+
+### 48.5 Automated MySQL backups — completed and tested
+
+- Backup directory: `/srv/innovex/backups/mysql/`.
+- Script: `/opt/innovex/scripts/backup-mysql.sh`.
+- Script performs per-database compressed SQL dumps, excluding MySQL system databases, with single-transaction/quick dump options and routines, triggers, events and binary data support.
+- Retention: 14 days.
+- A manual backup of `gym_management_db` was successfully created on 26 November 2026. Example verified archive: `gym_management_db_2026-11-26_18-00-32.sql.gz`.
+- `gzip -t` was run and passed for the created backup.
+- Cron schedule: daily at 02:00 Asia/Colombo, configured in `/etc/cron.d/innovex-mysql-backup`.
+- Log: `/var/log/innovex/mysql-backup.log`.
+- Cron service was confirmed active/enabled and the cron configuration was read back successfully.
+
+### 48.6 Automated application-storage backups — completed and tested
+
+- Source root: `/srv/innovex/storage/`.
+- Backup root: `/srv/innovex/backups/applications/`.
+- Script: `/opt/innovex/scripts/backup-applications.sh`.
+- The script automatically discovers immediate application directories under `/srv/innovex/storage`, so future app storage folders are included without manually maintaining a fixed list.
+- Each application directory is archived separately as a compressed tar.gz archive, with a SHA-256 checksum file.
+- Hidden/temp folders and temporary file patterns are excluded according to the script's rules.
+- Retention: 14 days.
+- The manual run on 26 November 2026 successfully backed up all six current storage folders: `gym-management`, `client-workflow`, `pos`, `ecommerce`, `innovex-web` and `ai-global-workflow`.
+- All six archive files were checked with `tar -tzf`; checksum verification also passed.
+- Cron schedule: daily at 02:30 Asia/Colombo, configured in `/etc/cron.d/innovex-applications-backup`.
+- Log: `/var/log/innovex/application-backup.log`.
+- Cron service was confirmed active/enabled and the cron configuration was read back successfully.
+
+### 48.7 Backup access from the user's Windows laptop
+
+- WinSCP was installed on the user's Windows 11 laptop and successfully connected to the VPS using SFTP and the existing Ed25519 SSH key.
+- The remote backup directory can be accessed by setting WinSCP's remote directory directly to `/srv/innovex/backups/`.
+- The user successfully downloaded backup files to the home laptop.
+- The `/srv/innovex` parent directory intentionally does not grant directory listing to `ubuntu`; do not broaden access to the entire `/srv/innovex` tree merely to make WinSCP browsing easier.
+- ACL access was configured to allow the `ubuntu` user to traverse `/srv/innovex` and read backup contents. Backup directory default ACLs were also set.
+- Note for future maintenance: the application backup script applies restrictive `chmod 600` to archive/checksum files. Verify the effective named-user ACL on newly created files after each backup run, because chmod can alter the ACL mask. Ensure WinSCP can still read new daily backups before relying on them as off-site copies.
+- The home laptop currently serves as a manually maintained off-site copy location; no separate cloud backup provider has been configured.
+
+### 48.8 Current confirmed service and security boundaries
+
+- Docker, Docker Compose and cron are installed; cron is active/enabled.
+- UFW inbound rules remain limited to SSH (22), HTTP (80) and HTTPS (443).
+- MySQL 3306 is not publicly exposed.
+- phpMyAdmin 8081 is bound only to localhost and accessed through SSH tunnelling.
+- The API container has no direct public host-port mapping; external API access is intended to pass through Caddy after DNS and HTTPS are configured.
+- Keep using `sudo docker` for Docker commands; the `ubuntu` account is intentionally not added to the Docker group.
+- Do not change Docker socket permissions or expose database/admin services to the public internet.
+
+**End of current authoritative master handover document (26 November 2026, Section 48).**
+
+---
+
+## 49. Production member-list recovery — NIC encryption configuration and branch verification — 26 November 2026
+
+### 49.1 Confirmed root cause
+
+The production Gym App member-list endpoint returned HTTP 500 with the error code `MEMBER_NIC_KEY_NOT_CONFIGURED`. Diagnostic logs confirmed that branch switching itself was issuing the correct active branch IDs (Colombo Branch ID 3 and Nugegoda Branch ID 4). The member-list request received the active branch ID correctly. The failure was caused by missing NIC cryptography configuration in the production API container, not by the branch-switching logic.
+
+### 49.2 Diagnostic source release
+
+- Diagnostic logging was added to `src/controllers/gymAuthController.js` and `src/controllers/memberListController.js` to record branch-switch requests/session issuance and member-list request context without logging secrets.
+- Local timestamped backups were created before editing.
+- Node.js syntax checks passed.
+- API repository: `https://github.com/arafath65/gym-management-api`.
+- Branch: `main`.
+- Commit pushed: `65377eef2bdcb731cdc6ecd917ee461ea275b245` (`Add branch switching diagnostic logs`).
+- The deployed VPS API was rebuilt and only the `gym-api` service was recreated. The API container reported healthy after deployment.
+
+### 49.3 Production NIC key configuration — completed
+
+- The original `MEMBER_NIC_ENCRYPTION_KEY` and `MEMBER_NIC_LOOKUP_SECRET` values were transferred from the user's existing local `.env` file through a temporary file containing only those two settings. No key values are stored in this document or Git.
+- The temporary transfer file was installed as `/etc/innovex/gym-api/secrets/member_nic.env`, owned by `root:root`, permissions `0600`.
+- Both values were verified on the VPS as valid 64-character hexadecimal keys. Windows CRLF line endings were accounted for during validation.
+- The API service's `compose.yaml` now references the protected file through the Compose `env_file` property. `sudo docker compose config -q` passed.
+- Only the API service was recreated with `sudo docker compose up -d --no-deps gym-api`. MySQL and Caddy were not restarted.
+- Inside `innovex-gym-api`, both environment variables were verified as present and 64 characters long without printing their values.
+- The API container reported `Up (healthy)`.
+- The user confirmed the production health/member-list recovery test succeeded.
+
+### 49.4 Deployment and security boundaries
+
+- The NIC key file remains outside Git and is protected by root-only permissions.
+- Never generate replacement NIC keys for an existing production database. The encryption and lookup keys must remain consistent with the values used to create existing member identity data.
+- Do not copy the NIC keys into the master document, GitHub, Flutter source, Compose literals, logs or chat.
+- The production `env_file` path is VPS-specific deployment configuration. Keep the protected key file out of source control.
+- The diagnostic logs may remain in the API source until a separately reviewed cleanup is requested. Do not remove them as part of an unrelated release.
+
+### 49.5 Current repository release checkpoints
+
+- Gym API `main` latest verified remote commit: `65377eef2bdcb731cdc6ecd917ee461ea275b245` (`Add branch switching diagnostic logs`).
+- Gym App `main` latest verified remote commit at this checkpoint: `1a33909b4fbd3026ec9f898f1ea050d0cf510fe4` (`feat(app): improve responsive gym management screens`). No new Gym App source modification was required for the NIC configuration fix. Inspect the user's active Gym App working copy for any separate pending changes before creating another commit; do not assume the local tree is clean or push without reviewing its exact diff.
+- Canonical master remains in the root of `arafath65/gym-management-super-admin` as `GYM_MANAGEMENT_PROJECT_MASTER.md`.
+
+### 49.6 Next continuation steps
+
+1. Check the active Gym App working copy with `git status --short --branch`, `git diff --stat` and `git diff --check`. Inspect untracked files individually. Do not stage backups, ZIPs, local configuration, secrets or unrelated changes.
+2. If there are intended Gym App source changes, run `dart format` on the changed Dart files, run the full `flutter analyze`, review the exact diff, stage only approved paths, commit and push `main`. If there are no pending intended changes, record that the remote is already at `1a33909` and do not create an empty commit.
+3. Keep the API production environment file and other server-only configuration out of Git. Record any future API source changes as a separate reviewed API commit.
+4. Continue production verification from the app as needed, including member search/listing in both branches and member-profile access. Preserve the established rule that registration branch is an analytics reference, not an organization-wide member access restriction.
+
+**End of current authoritative master handover document (26 November 2026, Section 49).**
