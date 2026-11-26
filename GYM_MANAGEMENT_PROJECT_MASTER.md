@@ -1,7 +1,7 @@
 # GYM MANAGEMENT PROJECT MASTER
 
 **Technical handover and continuation reference**
-**Last updated:** 26 November 2026 (responsive Flutter UI foundation and phone/tablet screen layouts; Sections 44–45)
+**Last updated:** 26 November 2026 (Sections 44–45 responsive Flutter work; Section 46 Contabo VPS infrastructure checkpoint)
 **Project owner / development context:** Innovex Fitness Center / Innovex Web Solutions
 **Primary development environment:** Windows, PowerShell, Flutter, Node.js and MySQL 8. The active PowerShell project paths explicitly confirmed during the 20 November continuation are `D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_api` and `D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_app`. Earlier office-laptop paths and GitHub release checkpoints in Sections 31, 33 and 35 are historical records; verify the current machine, branch and working-tree state before any Git operation.
 
@@ -5792,4 +5792,341 @@ That commit predates the responsive screen work recorded in this section. Before
 
 Do not reset, discard or overwrite the user's existing local source changes. The separate API and Super Admin source histories and all prior commit records remain unchanged by this responsive UI documentation section.
 
-**End of current authoritative master handover document (26 November 2026, Section 45).**
+
+
+
+---
+
+## 46. Contabo VPS Infrastructure Setup — Gym Management Hosting Checkpoint (26 November 2026)
+
+This section records the initial infrastructure preparation for hosting the Innovex Gym Management System on the Contabo VPS. It documents the server foundation and current deployment state only. The Gym Management API, production database and application services have **not yet been deployed**.
+
+### 46.1 Hosting objective and selected architecture
+
+The user selected Docker Compose as the deployment approach.
+
+Planned architecture:
+
+- Ubuntu 24.04.5 LTS host operating system.
+- Docker Engine and Docker Compose for application/service isolation.
+- Caddy as the public reverse proxy and HTTPS certificate manager, accepting public web traffic on ports 80 and 443.
+- Gym Management API as a Node.js/Express container.
+- MySQL 8 as a persistent database container on a private Docker network.
+- The intended Gym database name is `gym_management_db`.
+- Flutter Gym App and Super Admin applications remain client applications; their API connections will use the public HTTPS API hostname after DNS/TLS are configured.
+- Cockpit is the Ubuntu administration dashboard.
+- Portainer CE is installed as an optional Docker GUI, but its local Docker environment currently fails to connect. Docker Compose CLI is the reliable management path until that issue is resolved.
+- phpMyAdmin may be added later for database administration, but only through private access/SSH tunneling.
+- Future Innovex applications may be hosted as separate Compose projects after the Gym deployment requirements and resource limits are reviewed. Do not combine unrelated application databases or secrets in one Compose environment.
+
+### 46.2 VPS hardware and operating system
+
+Confirmed on 26 November 2026:
+
+| Item | Confirmed value |
+|---|---|
+| Provider / plan | Contabo VPS 4 |
+| Operating system | Ubuntu 24.04.5 LTS (Noble) |
+| Architecture | x86_64 / amd64 |
+| CPU | 4 vCPU |
+| RAM | Approximately 7.8 GiB |
+| Storage | 100 GB plan; root filesystem approximately 96 GB usable |
+| Kernel after reboot | `6.8.0-151-generic` |
+| Timezone | `Asia/Colombo` (+05:30) |
+| NTP | Active |
+| Swap | 4 GB `/swapfile`, active and persistent in `/etc/fstab` |
+| Swappiness | `10` |
+| Network interface | `eth0` |
+| Network configuration | Netplan with `systemd-networkd` managing the VPS interface |
+| IPv4 / IPv6 | Both are configured; exact public addresses and interface MAC are intentionally omitted from this document |
+
+After the kernel/package update reboot, the user reconnected successfully over SSH. The running kernel, swap persistence and package health were checked.
+
+### 46.3 Initial OS package recovery
+
+The initial fresh Ubuntu image had an interrupted `dpkg` state. Investigation found numbered files under `/var/lib/dpkg/updates/` that consisted entirely of NUL bytes. The main `/var/lib/dpkg/status`, `status-old` and backup status file were inspected and found valid.
+
+Recovery actions completed:
+
+- A dpkg/apt recovery archive was created under `/root/dpkg-recovery-20261126_111425/`.
+- The malformed numbered update fragments were preserved in a quarantine directory under that recovery folder.
+- `sudo dpkg --configure -a` subsequently completed.
+- `sudo dpkg --audit` returned no findings.
+- `sudo apt-get check` passed.
+- Seven damaged/empty BIND 9 shared libraries were separately backed up under `/root/bind9-recovery-20261126_112804/`.
+- The official Ubuntu `bind9-libs` package version `1:9.18.39-0ubuntu0.24.04.9` was installed, with matching `bind9-host` and `bind9-dnsutils` packages upgraded.
+- `sudo dpkg --verify bind9-libs`, `sudo ldconfig`, `sudo dpkg --audit` and `sudo apt-get check` completed without the earlier errors.
+- `sudo apt upgrade` reported no pending upgrades before the reboot.
+
+Do not delete the recovery archives or quarantined package fragments during routine cleanup. No confirmed ext4/journal I/O error was found in the investigation described in this checkpoint.
+
+### 46.4 Linux administration account and SSH hardening
+
+The normal server administration account is `ubuntu`, with sudo privileges.
+
+SSH hardening was configured in:
+
+`/etc/ssh/sshd_config.d/00-innovex-security.conf`
+
+Effective settings verified after reboot:
+
+```text
+PermitRootLogin no
+PasswordAuthentication no
+PubkeyAuthentication yes
+KbdInteractiveAuthentication no
+```
+
+Additional confirmed facts:
+
+- SSH remains on TCP port `22`.
+- An ED25519 key generated on the user's Windows computer was installed for the `ubuntu` account.
+- SSH public-key login was confirmed before and after the server reboot.
+- `sudo whoami` returned `root` in the established SSH session.
+- `sshd -t` passed.
+- Password authentication and root SSH login are disabled.
+
+**Pending verification:** UFW was enabled after the last successful SSH session. The user paused before testing a brand-new second SSH connection from Windows PowerShell. On resumption, open a new PowerShell window, test key login and `sudo whoami`, and keep the existing session open until the second connection is confirmed.
+
+Never store the private SSH key, passwords, or authentication tokens in this document.
+
+### 46.5 Network ownership and Cockpit dashboard
+
+Netplan reports the `eth0` interface with the VPS IPv4/IPv6 addressing, DNS resolvers and default routes.
+
+The following network service state was observed:
+
+- `systemd-networkd` is active.
+- `NetworkManager` is also active.
+- `networkctl status eth0` reports the interface as `routable (configured)` using the generated Netplan network file.
+- `nmcli device status` reports `eth0` and `lo` as `unmanaged`.
+
+This indicates that `systemd-networkd` currently manages the cloud network interface. Do not disable NetworkManager or systemd-networkd, or edit the VPS interface through Cockpit, without first reviewing the active Netplan configuration and a recovery path.
+
+Cockpit installation and access:
+
+- Installed Cockpit from Ubuntu Noble backports.
+- Installed version: `362-1`bpo24.04.1`.
+- `cockpit.socket` is enabled and listening on port `9090`.
+- The user successfully opened the Cockpit browser dashboard using an SSH tunnel.
+- Cockpit is an administration interface and must remain private; do not add a public UFW allow rule for port `9090`.
+- Use the Cockpit dashboard for monitoring, logs, storage and service status. Avoid changing the active cloud NIC from Cockpit until network ownership is fully understood.
+
+### 46.6 Docker Engine and Compose installation
+
+Docker was installed from the official Docker Ubuntu APT repository.
+
+Repository files:
+
+```text
+/etc/apt/keyrings/docker.asc
+/etc/apt/sources.list.d/docker.sources
+```
+
+Repository suite: `noble`; component: `stable`; architecture: `amd64`.
+
+Installed package versions:
+
+| Package | Installed version |
+|---|---|
+| `docker-ce` | `5:29.10.1-1`ubuntu.24.04`noble` |
+| `docker-ce-cli` | `5:29.10.1-1`ubuntu.24.04`noble` |
+| `containerd.io` | `2.4.2-4`ubuntu.24.04`noble` |
+| `docker-buildx-plugin` | `0.39.1-1`ubuntu.24.04`noble` |
+| `docker-compose-plugin` | `5.8.0-1`ubuntu.24.04`noble` |
+| `docker-ce-rootless-extras` | Installed |
+| `pigz` | Installed |
+
+Validation completed:
+
+- `docker.service` is enabled and `active (running)`.
+- Docker daemon initialization completed and its API listens on `/run/docker.sock`.
+- `sudo docker run --rm hello-world` pulled and ran the test image successfully and displayed `Hello from Docker!`.
+- Docker Compose configuration validation succeeded for the Portainer stack.
+- Initial Docker logs included cleanup attempts for nftables tables that did not yet exist and an `fsverity` capability warning. Docker completed startup normally; no workaround was applied solely because of those startup messages.
+- The `ubuntu` user was not added to the `docker` group. Continue using `sudo docker ...` and `sudo docker compose ...`; membership in the Docker group gives root-equivalent control.
+
+### 46.7 Innovex directory created and Portainer configuration
+
+The Portainer directory exists:
+
+```text
+/opt/innovex/infrastructure/portainer/
+```
+
+It is owned by `ubuntu` with mode `0750`.
+
+Compose file:
+
+```text
+/opt/innovex/infrastructure/portainer/compose.yaml
+```
+
+Deployed Compose configuration:
+
+```yaml
+services:
+  portainer:
+    image: portainer/portainer-ce:lts
+    container_name: portainer
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9443:9443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+
+volumes:
+  portainer_data:
+    name: portainer_data
+```
+
+Confirmed Portainer state:
+
+- Portainer Community Edition LTS image is installed; startup logs identify Portainer version `2.45.4`.
+- Container name: `portainer`.
+- Container is running.
+- Docker network: `portainer_default`.
+- Persistent Docker volume: `portainer_data`, mounted at `/data`.
+- Docker socket mount: `/var/run/docker.sock` to `/var/run/docker.sock`.
+- Host HTTPS port is bound to `127.0.0.1:9443`, not to the public interface.
+- Container ports `8000` and `9000` appear in `docker ps` as container ports but are not published on the VPS host.
+- The user completed first-time Portainer administrator setup.
+- Edge Compute was left disabled because no remote edge agents are being managed.
+- Access Portainer through a Windows SSH tunnel to server loopback port `9443` (the previously used local Windows forwarding port was `19443`).
+
+Do not record the Portainer administrator password or temporary setup token.
+
+### 46.8 Portainer local Docker environment connection issue — unresolved
+
+After the initial wizard reported the local environment connected, the user selected **Get Started**. Portainer then displayed:
+
+```text
+We could not connect your local environment to Portainer.
+```
+
+Diagnostics performed:
+
+- Host socket exists with mode `srw-rw----`, owner `root:docker`.
+- `docker inspect portainer` confirmed the `/var/run/docker.sock` bind mount and `/data` persistent volume.
+- Direct host Docker API ping using the socket returned `OK`:
+
+```bash
+sudo curl --silent --show-error --unix-socket /var/run/docker.sock http://localhost/_ping
+```
+
+- Attempting `docker exec portainer ls ...` returned `executable file not found` because the minimal Portainer image does not include the `ls` executable. This does not prove that the socket is missing.
+- The actual Portainer endpoint error has not yet been diagnosed.
+- Do not remove the `portainer_data` volume or recreate the Portainer container blindly. The Portainer GUI is optional; use Docker Compose CLI to proceed with the Gym deployment.
+
+### 46.9 UFW firewall — enabled
+
+Before configuration, UFW was inactive.
+
+IPv6 support in `/etc/default/ufw` was confirmed:
+
+```text
+IPV6=yes
+```
+
+Default policies verified:
+
+```text
+DEFAULT_INPUT_POLICY="DROP"
+DEFAULT_OUTPUT_POLICY="ACCEPT"
+DEFAULT_FORWARD_POLICY="DROP"
+```
+
+Rules added and firewall enabled:
+
+| Port | Protocol | Purpose | IPv4 | IPv6 |
+|---|---|---|---|---|
+| 22 | TCP | SSH | Allowed | Allowed |
+| 80 | TCP | HTTP / future Caddy | Allowed | Allowed |
+| 443 | TCP | HTTPS / future Caddy | Allowed | Allowed |
+
+`sudo ufw status verbose` confirmed:
+
+- `Status: active`.
+- Incoming connections denied by default.
+- Outgoing connections allowed.
+- Routed traffic denied by default.
+- Rules for ports `22`, `80` and `443` are present for both IPv4 and IPv6.
+
+No public UFW allow rules were added for Cockpit `9090`, Portainer `9443`, or MySQL `3306`.
+
+**Important Docker/UFW boundary:** Docker-published ports may be handled by Docker-managed firewall rules and may bypass ordinary UFW filtering. Therefore:
+- Keep Portainer and Cockpit bound to host loopback and reachable only through SSH tunnels.
+- Do not publish MySQL port `3306` to the public internet.
+- Review Docker forwarding/`DOCKER-USER` behavior before publishing any application container ports.
+- The intended public web entry point is Caddy on ports `80` and `443`.
+
+### 46.10 Exact continuation point — resume here
+
+**Current confirmed position (26 November 2026):** Ubuntu, Cockpit, Docker Engine, Docker Compose, Portainer and UFW have been prepared. The user paused before the fresh SSH verification following UFW activation. No Gym Management API container, MySQL 8 container, Caddy proxy or production Gym database has been deployed yet.
+
+Resume in this exact order:
+
+1. **Test a new SSH connection from Windows PowerShell.** Keep the current SSH session open. Run the following in a new Windows PowerShell window, substituting the VPS public IPv4 address from the user's approved private notes or Contabo panel:
+
+   ```powershell
+   ssh -i "$env:USERPROFILE\\.ssh\\innovex_vps_ed25519" ubuntu@<VPS_PUBLIC_IP>
+   ```
+
+   After login:
+
+   ```bash
+   sudo whoami
+   sudo ufw status verbose
+   ```
+
+   Expected sudo result: `root`. Do not close the original SSH session until the second session works.
+
+2. Create and verify the remaining directory structure. The Portainer directory is already present; the broader `/opt/innovex/` application layout and `/srv/innovex/` persistent database/backup/storage layout still need to be completed. Planned structure:
+
+   ```text
+   /opt/innovex/
+     infrastructure/
+       docker/
+       caddy/
+       portainer/
+     apps/
+       gym-management/
+         api/
+     scripts/
+
+   /srv/innovex/
+     database/
+     backups/
+     storage/
+   ```
+
+3. Review Docker/UFW forwarding behavior and keep database/admin ports private.
+
+4. Configure Caddy as the public reverse proxy on ports `80` and `443`. Confirm the real DNS hostname and its A/AAAA records before setting up the production site and requesting HTTPS certificates.
+
+5. Deploy MySQL 8 with persistent storage and a private Docker network. Use database name `gym_management_db`. Do not publish host port `3306`. Plan backups and restore verification before production data is stored.
+
+6. Review the live `gym-management-api` repository and its current environment variable names, package/runtime requirements, migration state and database access code before writing the production Compose service. The project requirements previously specified Node.js `24.20.0`, npm `11.19.0`, Express, MySQL 8 and `mysql2` promise API. Verify current repository files instead of assuming these versions/configurations are still unchanged.
+
+7. When the API runs inside Docker, do not leave its DB host set to `localhost`: inside a container, localhost refers to that API container. Configure the database host to the internal Compose service/network alias, while retaining database secrets in an untracked server-side environment file.
+
+8. Deploy and test the Gym Management API, then configure the Flutter Gym App and Super Admin API base URL to use the verified HTTPS hostname. Do not place development or production secrets in the Flutter repositories.
+
+9. Add phpMyAdmin only if needed, and keep it available through SSH tunnel/private access only.
+
+10. Troubleshoot Portainer's environment connection separately if the user still wants to use its GUI. Preserve the existing `portainer_data` volume.
+
+11. Verify service restart behavior, database persistence, backups/restores, API health, HTTPS, DNS, login, tenant isolation, organization/branch rules, and reboot/reconnect behavior before considering the deployment production-ready.
+
+### 46.11 Security and handover rules
+
+- Never store SSH private keys, SSH passwords, Portainer administrator credentials, one-time setup tokens, database passwords, production environment values, backup encryption keys or other secrets in this master.
+- Keep Cockpit and Portainer private and access them with SSH tunnels.
+- Keep MySQL private on Docker networks; do not expose `3306` publicly.
+- Do not add public application ports until Docker/UFW behavior has been reviewed.
+- Preserve the dpkg and BIND recovery archives until a separate retention decision is made.
+- The infrastructure is a prepared foundation only. Do not describe the Gym API or production database as deployed until their containers and application health have actually been verified.
+
+
+**End of current authoritative master handover document (26 November 2026, Section 46).**
