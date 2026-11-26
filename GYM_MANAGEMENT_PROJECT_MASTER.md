@@ -1,7 +1,7 @@
 # GYM MANAGEMENT PROJECT MASTER
 
 **Technical handover and continuation reference**
-**Last updated:** 25 November 2026 (Dashboard member QR shortcut; membership/program payment receipts; consolidated multi-select receipt printing; Section 44)
+**Last updated:** 26 November 2026 (responsive Flutter UI foundation and phone/tablet screen layouts; Sections 44–45)
 **Project owner / development context:** Innovex Fitness Center / Innovex Web Solutions
 **Primary development environment:** Windows, PowerShell, Flutter, Node.js and MySQL 8. The active PowerShell project paths explicitly confirmed during the 20 November continuation are `D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_api` and `D:\Personal\INNOVEX WEB\Flutter Projects\gym_management_app`. Earlier office-laptop paths and GitHub release checkpoints in Sections 31, 33 and 35 are historical records; verify the current machine, branch and working-tree state before any Git operation.
 
@@ -5489,3 +5489,307 @@ The scripts excluded `.patch-backups/` and stopped when they encountered unappro
 The API and Gym App source repositories are now published through the commits above. The Super Admin repository's master handover remains a separate documentation repository; its own application source was not part of these two pushes.
 
 **End of current authoritative master handover document (25 November 2026, Section 44.10).**
+
+---
+
+## 45. Responsive Flutter UI Foundation and Screen-by-Screen Mobile/Tablet Pass — 26 November 2026
+
+### 45.1 Responsive foundation and layout rules
+
+The Gym App received a shared responsive foundation so the same Flutter application can serve phones, tablets and larger tablet layouts without creating separate screen implementations.
+
+New shared source files:
+
+```text
+lib/core/responsive/app_breakpoints.dart
+lib/core/responsive/responsive_layout.dart
+```
+
+The responsive breakpoints recorded for the working copy are:
+
+| Layout | Logical width |
+|---|---:|
+| Phone | Less than 600 px |
+| Tablet | 600–999 px |
+| Large tablet | 1000 px and above |
+
+Navigation behavior:
+
+- Below 1000 logical px, the app uses the navigation drawer.
+- At 1000 logical px and above, the app uses the permanent sidebar.
+- Existing active-branch selection and branch-switching behavior must remain intact across the responsive layouts.
+
+The common authenticated shell was updated in:
+
+```text
+lib/features/auth/presentation/gym_authenticated_screen.dart
+```
+
+Phone layout work includes a compact top header and a more compact Dashboard hero/activity presentation. The Dashboard and shell retain the existing navigation destinations and permission-gated actions.
+
+Phone page-edge spacing was standardized for the screens included in this pass:
+
+- Below 375 px: approximately 10 px.
+- 375–599 px: approximately 12 px.
+- Tablet layouts retain their existing larger page spacing unless a screen-specific responsive rule is documented below.
+
+The root page padding work included:
+
+```text
+lib/features/auth/presentation/gym_authenticated_screen.dart
+lib/features/members/presentation/member_management_screen.dart
+lib/features/trainers/presentation/trainer_management_screen.dart
+lib/features/attendance/presentation/attendance_screen.dart
+lib/features/payments/presentation/payments_screen.dart
+```
+
+The splash-screen mobile adjustment hides the Database status indicator from the small-screen presentation only. It does not remove or disable the underlying database health check.
+
+### 45.2 Responsive test and backup evidence
+
+The shared breakpoint test file is:
+
+```text
+test/core/responsive/app_breakpoints_test.dart
+```
+
+The user-reported validation for the responsive foundation was:
+
+- Dart formatting completed.
+- Targeted Flutter analysis reported no issues.
+- All 7 breakpoint tests passed.
+
+Known timestamped backup directories created during this responsive pass:
+
+```text
+.patch-backups\responsive_foundation_20261125_212502_704
+.patch-backups\mobile_dashboard_20261125_214037_467
+.patch-backups\splash_mobile_database_indicator_20261126_083002_091
+.patch-backups\roles_phone_navigation_v3_20261126_090818_533
+```
+
+Other screen-specific patches also used timestamped backups as part of the PowerShell patch workflow. Their exact directory names were not all retained in the available handover notes; do not invent backup names.
+
+### 45.3 Screen-by-screen responsive changes
+
+#### Roles & Permissions
+
+Source:
+
+```text
+lib/features/roles/presentation/roles_permissions_screen.dart
+```
+
+Phone behavior was changed from the cramped split/list-detail arrangement to a full-screen navigation flow:
+
+1. Show the role list.
+2. Open the selected role as a full-screen detail view.
+3. Provide a **BACK TO ROLES** action to return to the role list.
+
+The tablet/desktop layout and existing role/permission actions were preserved. The user tested the phone navigation and confirmed that it worked.
+
+#### Membership Plans and Programs
+
+Source:
+
+```text
+lib/features/membership_plans/presentation/membership_plans_screen.dart
+```
+
+Phone layout:
+
+- The page heading and New Plan/Program action stack vertically.
+- The New Plan/Program button uses the full available width and a phone-friendly touch target.
+- Catalog occupies its own full-width row.
+- Search occupies its own full-width row.
+- Status and Package filters share a two-column row.
+- Validity and Duration filters share a two-column row.
+- Refresh is placed on its own aligned row.
+
+The wider tablet/desktop Wrap layout remains in place. Existing search, catalog, status, package, validity and duration filter behavior was retained.
+
+#### Staff Management
+
+Source:
+
+```text
+lib/features/staff/presentation/staff_management_screen.dart
+```
+
+Phone layout adjustments recorded for this screen:
+
+- The page uses the compact phone page-edge spacing.
+- The ADD STAFF action becomes a full-width button with a phone-friendly minimum touch height.
+- Search field vertical padding is reduced to make the filter area more compact.
+- The Status dropdown expands to the available phone width and uses a dense layout.
+- Search and status controls are arranged to fit the narrow screen.
+
+Staff loading, search, status filtering, permission checks and staff actions remain existing business behavior; this pass is a presentation/layout change.
+
+#### Branch Management
+
+Source:
+
+```text
+lib/features/branches/presentation/branch_management_screen.dart
+```
+
+Phone layout adjustments:
+
+- The page heading and ADD BRANCH button stack vertically; ADD BRANCH fills the available width.
+- Search uses the available phone width.
+- Status and the 48 × 48 refresh control sit on the same row; refresh is immediately next to Status rather than on a separate line.
+- A vertical gap remains between the header and the filter section when the optional session branch switcher is absent.
+- Branch-card actions wrap to fit the phone and use phone-friendly touch targets.
+- Pagination wraps on narrow layouts.
+- The branch form dialog is constrained responsively.
+
+Important behavior retained: attempting to deactivate the current active branch still invokes the existing confirmation/switch-branch warning flow. Do not replace this with a silent status change.
+
+The user confirmed the Branch Management layout and the inline Status/refresh arrangement were complete.
+
+#### Device Management
+
+Source:
+
+```text
+lib/features/devices/presentation/device_management_screen.dart
+```
+
+Device Management was included in the responsive screen review. The planned phone behavior covers a full-width search field, a Status filter sharing its row with the result count, scrollable/responsive assignment and history dialogs, and larger phone action targets.
+
+The user's 26 November overall status was that the screen-by-screen responsive work was complete. However, the final Device Management patch command output is not present in the retained transcript. Treat the user's overall completion report as the status supplied here, but inspect the current source before making another Device Management change or claiming a separate analyzer/runtime result for this file.
+
+Preserve the established device architecture: devices remain organization-bound, and `registered_branch_id` is a reference/assignment field, not an operational branch-access restriction.
+
+#### Audit Logs
+
+Source:
+
+```text
+lib/features/audit_logs/presentation/audit_logs_screen.dart
+```
+
+Phone layout adjustments:
+
+- Search uses a full-width row.
+- Action and Module filters share a two-column row.
+- User uses a full-width row.
+- From and To date filters share a two-column row.
+- Clear Filters and the 48 × 48 refresh action share a row.
+- Detail-dialog width is responsive and its label column is narrower on phones.
+- Pagination wraps on small widths.
+
+A Pixel 3a layout test exposed a 2 px overflow in the Action/Module row. The half-width calculation was corrected from subtracting 10 px to subtracting 14 px before dividing:
+
+```dart
+final halfWidth = (contentWidth - 14) / 2;
+```
+
+This fix was applied with a timestamped backup. The user confirmed the Audit Logs screen was then complete. Targeted formatting, analyzer and Git whitespace checks were reported as successful for this work.
+
+#### Trainer Management
+
+Source:
+
+```text
+lib/features/trainers/presentation/trainer_management_screen.dart
+```
+
+The phone layout pass covers:
+
+- Stacking the Trainer Management heading and NEW TRAINER button, with the button full width on phones.
+- Full-width phone search.
+- Status filter expanded to the remaining phone width with the refresh action kept alongside it.
+- Larger phone touch targets for View, Branches/Assignments, Edit and Deactivate/Reactivate actions.
+- Wrapping pagination controls on narrow widths.
+- Preserving the wider layout for tablets and desktop.
+
+The existing trainer form and assignment-dialog workflows were not intended to be redesigned by this pass. The user's 26 November overall status was that all screen layouts were complete; the final Trainer Management patch output is not separately retained in this handover. Recheck the current source and analyzer before making any further changes to this screen.
+
+#### Member Management
+
+Source:
+
+```text
+lib/features/members/presentation/member_management_screen.dart
+```
+
+The phone filter layout is intended to be:
+
+1. Search field on its own full-width row.
+2. Status dropdown on the next row, also full width.
+3. Existing helper text below the filters.
+
+The tablet/desktop layout remains side by side. The existing search controller, clear-search action, debounce/search callback and status-change request callback are retained; this responsive adjustment is not intended to change the member query or API filtering behavior.
+
+The user's latest 26 November status was that all screen layouts were complete. The final PowerShell output for the last Member Management filter-layout patch is not separately present in the retained transcript, so the phone arrangement is recorded as the requested/user-reported final layout rather than as an independently inspected source diff.
+
+### 45.4 Business-logic and data-boundary safeguards
+
+This responsive pass is a Flutter presentation/layout milestone. It does not, by itself, change:
+
+- API route contracts or database schema.
+- Organization isolation or device ownership.
+- Roles, permissions, permission defaults or server authorization.
+- Member registration, membership billing or payment ledger rules.
+- Attendance check-in/check-out behavior.
+- Trainer assignments or branch access.
+- Existing search/filter callbacks and server-side filtering semantics.
+
+The branch rules already recorded in earlier sections remain authoritative:
+
+- A member must retain the required original `registration_branch_id` for reporting.
+- The registration branch does not restrict the member to that branch.
+- Members may attend any branch in the same organization.
+- Each attendance record stores the authenticated staff session's actual active branch at attendance time.
+
+The responsive changes must not weaken or replace these rules.
+
+The prior Member search report in Section 44.7 concerned a separate issue where a search was reportedly showing only Daily Plan active members. Repositioning the Member Management Search and Status controls is not evidence that this underlying search-result issue was fixed. Reproduce and investigate it separately if it is still present.
+
+### 45.5 Current completion and validation status — 26 November 2026
+
+The user reported that the responsive screen work was complete across the Gym App and that the remaining Member Management adjustment was to place Search and Status on separate full-width rows.
+
+Confirmed or explicitly user-tested results retained in the current development record:
+
+- Responsive breakpoint foundation: targeted analyzer passed and 7 breakpoint tests passed.
+- Roles & Permissions: user confirmed phone role-list/detail navigation worked.
+- Branch Management: user confirmed the responsive layout and inline Status/refresh row were done.
+- Audit Logs: user confirmed completion after the 2 px filter-row overflow correction.
+- Membership Plans/Programs: responsive filter/header layout patch was applied.
+- Staff Management: responsive filter and action layout patch was prepared/applied through the corrected PowerShell workflow.
+- Remaining screen-level final PowerShell output, especially Device Management, Trainer Management and the last Member Management change, is not separately preserved here. The user's overall completion report is retained, but do not convert that into a claim that every individual file received an independently captured full-project analyzer result.
+
+No full-project `flutter analyze` result covering every responsive screen change was supplied in this checkpoint. The responsive foundation test result and the targeted screen validations above must not be overstated as a complete end-to-end release test.
+
+### 45.6 GitHub publication boundary and continuation point
+
+This master handover is maintained in the Super Admin repository:
+
+```text
+https://github.com/arafath65/gym-management-super-admin/blob/main/GYM_MANAGEMENT_PROJECT_MASTER.md
+```
+
+This Section 45 records the responsive Flutter work and the user's 26 November completion status. Updating and publishing this master document is a documentation-only change to the Super Admin repository; it does not publish the responsive Gym App source files.
+
+The latest separately recorded Gym App source publication remains the Section 44.10 commit:
+
+```text
+2f17b78668bffad39354c8455a6a7d01cc9d333c
+```
+
+That commit predates the responsive screen work recorded in this section. Before publishing any newer Gym App source:
+
+1. Run `git status --short --branch` in the Gym App working copy.
+2. Inspect the exact modified and untracked source files.
+3. Review `git diff` and `git diff --check`.
+4. Run full-project `flutter analyze` and the relevant tests.
+5. Stage only explicitly reviewed source files; never use `git add .`.
+6. Keep `.patch-backups/`, secrets, local database files, private member photos, generated exports and other local-only files out of Git.
+7. Commit and push the Gym App repository independently, then verify the remote `main` SHA and record the exact commit and changed-file list here.
+
+Do not reset, discard or overwrite the user's existing local source changes. The separate API and Super Admin source histories and all prior commit records remain unchanged by this responsive UI documentation section.
+
+**End of current authoritative master handover document (26 November 2026, Section 45).**
