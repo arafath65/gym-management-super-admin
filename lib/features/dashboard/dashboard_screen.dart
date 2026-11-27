@@ -119,55 +119,64 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               const SizedBox(height: 12),
 
-              Row(
-                children: [
-                  Expanded(
-                    child: _SummaryCard(
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final columns = constraints.maxWidth >= 1000
+                      ? 4
+                      : constraints.maxWidth >= 560
+                          ? 2
+                          : 1;
+
+                  const spacing = 12.0;
+                  final cardWidth =
+                      (constraints.maxWidth - spacing * (columns - 1)) /
+                      columns;
+
+                  final cards = [
+                    _SummaryCard(
                       title: 'Organizations',
                       value: _isLoadingOrganizations
                           ? '...'
-                          : _organizationCount?.toString() ?? 'Ã¢â‚¬â€',
+                          : _organizationCount?.toString() ?? '—',
                       icon: Icons.business_outlined,
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _SummaryCard(
+                    _SummaryCard(
                       title: 'Active Devices',
                       value: _isLoadingActiveDevices
                           ? '...'
-                          : _activeDeviceCount?.toString() ?? 'Ã¢â‚¬â€',
+                          : _activeDeviceCount?.toString() ?? '—',
                       icon: Icons.devices_outlined,
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: _SummaryCard(
+                    _SummaryCard(
                       title: 'Active Licenses',
                       value: _isLoadingActiveDevices
                           ? '...'
-                          : _activeLicenseCount?.toString() ?? 'Ã¢â‚¬â€',
+                          : _activeLicenseCount?.toString() ?? '—',
                       icon: Icons.verified_outlined,
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _SummaryCard(
+                    _SummaryCard(
                       title: 'Pending Devices',
                       value: _isLoadingActiveDevices
                           ? '...'
-                          : _pendingDeviceCount?.toString() ?? 'Ã¢â‚¬â€',
+                          : _pendingDeviceCount?.toString() ?? '—',
                       icon: Icons.pending_actions_outlined,
                     ),
-                  ),
-                ],
-              ),
+                  ];
 
+                  return Wrap(
+                    spacing: spacing,
+                    runSpacing: spacing,
+                    children: cards
+                        .map(
+                          (card) => SizedBox(
+                            width: cardWidth,
+                            child: card,
+                          ),
+                        )
+                        .toList(),
+                  );
+                },
+              ),
               if (_organizationError != null) ...[
                 const SizedBox(height: 12),
                 Text(

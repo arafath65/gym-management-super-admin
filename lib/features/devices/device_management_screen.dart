@@ -354,7 +354,8 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
       builder: (dialogContext) {
         return AlertDialog(
           title: Text(title),
-          content: Column(
+          content: SingleChildScrollView(
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -388,9 +389,9 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                   code,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                    fontSize: 25,
+                    fontSize: 20,
                     fontWeight: FontWeight.bold,
-                    letterSpacing: 3,
+                    letterSpacing: 1.5,
                     color: _dark,
                   ),
                 ),
@@ -401,6 +402,7 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                 style: TextStyle(color: Colors.blueGrey, fontSize: 12),
               ),
             ],
+            ),
           ),
           actions: [
             TextButton.icon(
@@ -489,7 +491,9 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
             return AlertDialog(
               title: const Text('Register Device'),
               content: SizedBox(
-                width: 440,
+                width: MediaQuery.sizeOf(dialogContext).width < 504
+                    ? MediaQuery.sizeOf(dialogContext).width - 64
+                    : 440,
                 child: SingleChildScrollView(
                   child: Form(
                     key: formKey,
@@ -982,8 +986,6 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                               ],
                             ),
                           ),
-                          const SizedBox(width: 6),
-                          _statusBadge(status),
                           const SizedBox(width: 4),
                           Icon(
                             isExpanded
@@ -1000,6 +1002,12 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                 _deviceActionsMenu(device, status),
               ],
             ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: _statusBadge(status),
+            ),
+
             if (isExpanded) ...[
               const SizedBox(height: 10),
               const Divider(height: 1),
@@ -1277,35 +1285,53 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
       ),
       child: Column(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Showing $startâ€“$end of $_totalDevices devices',
-                  style: const TextStyle(
-                    color: Colors.blueGrey,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 420;
+
+              final range = Text(
+                'Showing $start-$end of $_totalDevices devices',
+                style: const TextStyle(
+                  color: Colors.blueGrey,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              );
+
+              final pageSize = Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Rows:',
+                    style: TextStyle(fontSize: 12, color: Colors.blueGrey),
                   ),
-                ),
-              ),
-              const Text(
-                'Rows:',
-                style: TextStyle(fontSize: 12, color: Colors.blueGrey),
-              ),
-              const SizedBox(width: 8),
-              DropdownButtonHideUnderline(
-                child: DropdownButton<int>(
-                  value: _pageSize,
-                  items: const [
-                    DropdownMenuItem(value: 25, child: Text('25')),
-                    DropdownMenuItem(value: 50, child: Text('50')),
-                    DropdownMenuItem(value: 100, child: Text('100')),
-                  ],
-                  onChanged: _isLoading ? null : _onPageSizeChanged,
-                ),
-              ),
-            ],
+                  const SizedBox(width: 8),
+                  DropdownButtonHideUnderline(
+                    child: DropdownButton<int>(
+                      value: _pageSize,
+                      items: const [
+                        DropdownMenuItem(value: 25, child: Text('25')),
+                        DropdownMenuItem(value: 50, child: Text('50')),
+                        DropdownMenuItem(value: 100, child: Text('100')),
+                      ],
+                      onChanged: _isLoading ? null : _onPageSizeChanged,
+                    ),
+                  ),
+                ],
+              );
+
+              if (isNarrow) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [range, pageSize],
+                );
+              }
+
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [range, pageSize],
+              );
+            },
           ),
           const Divider(height: 18),
           Row(
@@ -1412,7 +1438,11 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                   children: [
                     LayoutBuilder(
                       builder: (context, constraints) {
-                        final width = (constraints.maxWidth - 20) / 3;
+                        final width = constraints.maxWidth >= 900
+                            ? (constraints.maxWidth - 20) / 3
+                            : constraints.maxWidth >= 560
+                                ? (constraints.maxWidth - 10) / 2
+                                : constraints.maxWidth;
 
                         return Wrap(
                           spacing: 10,

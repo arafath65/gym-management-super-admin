@@ -246,7 +246,9 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 content: SizedBox(
-                  width: 460,
+                  width: MediaQuery.sizeOf(dialogContext).width < 520
+                      ? double.infinity
+                      : 460,
                   child: SingleChildScrollView(
                     child: Form(
                       key: formKey,
@@ -711,7 +713,10 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
               label: const Text('Create Branch'),
             ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.symmetric(
+          horizontal: MediaQuery.sizeOf(context).width < 600 ? 12 : 20,
+          vertical: 20,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -845,38 +850,60 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                 ),
               ),
             ] else ...[
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: 'Search branch name, code, phone or address',
-                        prefixIcon: const Icon(Icons.search),
-                        suffixIcon: _search.isEmpty
-                            ? null
-                            : IconButton(
-                                onPressed: () {
-                                  _searchController.clear();
-                                  setState(() => _search = '');
-                                },
-                                icon: const Icon(Icons.close),
-                              ),
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final isMobile = constraints.maxWidth < 600;
+
+                  final searchField = TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: 'Search branch name, code, phone or address',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _search.isEmpty
+                          ? null
+                          : IconButton(
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => _search = '');
+                              },
+                              icon: const Icon(Icons.close),
+                            ),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
                       ),
-                      onChanged: (value) {
-                        setState(() => _search = value);
-                      },
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  SizedBox(width: 190, child: _buildStatusFilters()),
-                ],
+                    onChanged: (value) {
+                      setState(() => _search = value);
+                    },
+                  );
+
+                  final statusFilter = SizedBox(
+                    width: isMobile ? double.infinity : 190,
+                    child: _buildStatusFilters(),
+                  );
+
+                  if (isMobile) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        searchField,
+                        const SizedBox(height: 12),
+                        statusFilter,
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    children: [
+                      Expanded(child: searchField),
+                      const SizedBox(width: 12),
+                      statusFilter,
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 16),
               Row(
@@ -928,7 +955,13 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
               else
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    final columns = constraints.maxWidth >= 600 ? 2 : 1;
+                    final columns = constraints.maxWidth >= 1500
+                        ? 4
+                        : constraints.maxWidth >= 1050
+                            ? 3
+                            : constraints.maxWidth >= 600
+                                ? 2
+                                : 1;
 
                     return GridView.builder(
                       shrinkWrap: true,
@@ -937,7 +970,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                         crossAxisCount: columns,
                         crossAxisSpacing: 12,
                         mainAxisSpacing: 12,
-                        mainAxisExtent: 190,
+                        mainAxisExtent: constraints.maxWidth < 600 ? 240 : 190,
                       ),
                       itemCount: filtered.length,
                       itemBuilder: (context, index) {

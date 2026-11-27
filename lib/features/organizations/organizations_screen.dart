@@ -193,7 +193,9 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 content: SizedBox(
-                  width: 460,
+                  width: MediaQuery.sizeOf(dialogContext).width < 520
+                      ? double.infinity
+                      : 460,
                   child: SingleChildScrollView(
                     child: Form(
                       key: formKey,
@@ -1026,7 +1028,13 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 600 ? 2 : 1;
+        final columns = constraints.maxWidth >= 1500
+            ? 4
+            : constraints.maxWidth >= 1050
+                ? 3
+                : constraints.maxWidth >= 600
+                    ? 2
+                    : 1;
 
         return RefreshIndicator(
           onRefresh: _loadOrganizations,

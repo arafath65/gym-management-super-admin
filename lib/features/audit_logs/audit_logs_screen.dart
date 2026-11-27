@@ -349,29 +349,62 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
   }
 
   Widget _detailLine(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 118,
-            child: Text(
-              label,
-              style: const TextStyle(color: Colors.blueGrey, fontSize: 12),
-            ),
-          ),
-          Expanded(
-            child: SelectableText(
-              value.isEmpty ? 'Not recorded' : value,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-            ),
-          ),
-        ],
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 430;
+        final displayValue = value.isEmpty ? 'Not recorded' : value;
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: compact
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        color: Colors.blueGrey,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    SelectableText(
+                      displayValue,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 118,
+                      child: Text(
+                        label,
+                        style: const TextStyle(
+                          color: Colors.blueGrey,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: SelectableText(
+                        displayValue,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+        );
+      },
     );
   }
-
   Widget _jsonPanel(String title, dynamic value, IconData icon) {
     final text = _jsonText(value);
     return Container(
@@ -579,35 +612,65 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
       ),
       child: Column(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Showing $start-$end of $_total records',
-                  style: const TextStyle(fontSize: 12, color: Colors.blueGrey),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final rangeLabel = Text(
+                'Showing $start-$end of $_total records',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.blueGrey,
                 ),
-              ),
-              const Text(
-                'Rows:',
-                style: TextStyle(fontSize: 12, color: Colors.blueGrey),
-              ),
-              const SizedBox(width: 8),
-              DropdownButtonHideUnderline(
-                child: DropdownButton<int>(
-                  value: _pageSize,
-                  items: const [
-                    DropdownMenuItem(value: 25, child: Text('25')),
-                    DropdownMenuItem(value: 50, child: Text('50')),
-                    DropdownMenuItem(value: 100, child: Text('100')),
+              );
+
+              final rowsSelector = Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Rows:',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.blueGrey,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  DropdownButtonHideUnderline(
+                    child: DropdownButton<int>(
+                      value: _pageSize,
+                      items: const [
+                        DropdownMenuItem(value: 25, child: Text('25')),
+                        DropdownMenuItem(value: 50, child: Text('50')),
+                        DropdownMenuItem(value: 100, child: Text('100')),
+                      ],
+                      onChanged: _isLoading ? null : _changePageSize,
+                    ),
+                  ),
+                ],
+              );
+
+              if (constraints.maxWidth < 460) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    rangeLabel,
+                    const SizedBox(height: 4),
+                    rowsSelector,
                   ],
-                  onChanged: _isLoading ? null : _changePageSize,
-                ),
-              ),
-            ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(child: rangeLabel),
+                  const SizedBox(width: 8),
+                  rowsSelector,
+                ],
+              );
+            },
           ),
           const Divider(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          Wrap(
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               IconButton(
                 tooltip: 'First page',
@@ -653,7 +716,6 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
       ),
     );
   }
-
   Widget _buildBody() {
     if (_isLoading && _auditLogs.isEmpty) {
       return const Center(child: CircularProgressIndicator());
@@ -694,7 +756,7 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
           LayoutBuilder(
             builder: (context, constraints) {
               final spacing = 10.0;
-              final columns = constraints.maxWidth >= 760 ? 3 : 2;
+              final columns = constraints.maxWidth >= 900 ? 3 : constraints.maxWidth >= 520 ? 2 : 1;
               final width =
                   (constraints.maxWidth - spacing * (columns - 1)) / columns;
               return Wrap(
@@ -763,7 +825,7 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
           const SizedBox(height: 10),
           LayoutBuilder(
             builder: (context, constraints) {
-              final columns = constraints.maxWidth >= 900 ? 4 : 2;
+              final columns = constraints.maxWidth >= 1000 ? 4 : constraints.maxWidth >= 600 ? 2 : 1;
               final gap = 10.0;
               final width =
                   (constraints.maxWidth - gap * (columns - 1)) / columns;

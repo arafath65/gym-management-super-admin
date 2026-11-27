@@ -756,7 +756,9 @@ class _GymOwnerPasswordResetDialogState
     return AlertDialog(
       title: const Text('Reset Gym Owner Password'),
       content: SizedBox(
-        width: 420,
+        width: MediaQuery.sizeOf(context).width < 480
+            ? double.infinity
+            : 420,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

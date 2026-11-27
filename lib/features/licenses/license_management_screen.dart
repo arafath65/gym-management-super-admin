@@ -612,7 +612,7 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
       context: context,
       builder: (dialogContext) => Dialog(
         child: SizedBox(
-          width: 680,
+          width: MediaQuery.sizeOf(dialogContext).width < 760 ? MediaQuery.sizeOf(dialogContext).width - 80 : 680,
           child: FutureBuilder<Map<String, dynamic>>(
             future: _authService.getLicenseById(licenseId: id),
             builder: (context, snapshot) {
@@ -817,29 +817,61 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
   }
 
   Widget _detailLine(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 130,
-            child: Text(
-              label,
-              style: const TextStyle(fontSize: 12, color: Colors.blueGrey),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-            ),
-          ),
-        ],
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 420;
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: compact
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.blueGrey,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      value,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 130,
+                      child: Text(
+                        label,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.blueGrey,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        value,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+        );
+      },
     );
   }
-
   Future<void> _showCreateDialog() async {
     if (_organizations.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -899,7 +931,7 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
             return AlertDialog(
               title: const Text('Issue New License'),
               content: SizedBox(
-                width: 440,
+                width: MediaQuery.sizeOf(dialogContext).width < 520 ? MediaQuery.sizeOf(dialogContext).width - 80 : 440,
                 child: SingleChildScrollView(
                   child: Form(
                     key: formKey,
@@ -1135,7 +1167,7 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
             return AlertDialog(
               title: Text('Renew License #$licenseId'),
               content: SizedBox(
-                width: 420,
+                width: MediaQuery.sizeOf(dialogContext).width < 500 ? MediaQuery.sizeOf(dialogContext).width - 80 : 420,
                 child: SingleChildScrollView(
                   child: Form(
                     key: formKey,
@@ -1378,35 +1410,58 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
       ),
       child: Column(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Showing $start-$end of $_total licenses',
-                  style: const TextStyle(fontSize: 11, color: Colors.blueGrey),
-                ),
-              ),
-              const Text(
-                'Rows:',
-                style: TextStyle(fontSize: 11, color: Colors.blueGrey),
-              ),
-              const SizedBox(width: 6),
-              DropdownButtonHideUnderline(
-                child: DropdownButton<int>(
-                  value: _pageSize,
-                  items: const [
-                    DropdownMenuItem(value: 25, child: Text('25')),
-                    DropdownMenuItem(value: 50, child: Text('50')),
-                    DropdownMenuItem(value: 100, child: Text('100')),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final range = Text(
+                'Showing $start-$end of $_total licenses',
+                style: const TextStyle(fontSize: 11, color: Colors.blueGrey),
+              );
+
+              final pageSize = Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Rows:',
+                    style: TextStyle(fontSize: 11, color: Colors.blueGrey),
+                  ),
+                  const SizedBox(width: 6),
+                  DropdownButtonHideUnderline(
+                    child: DropdownButton<int>(
+                      value: _pageSize,
+                      items: const [
+                        DropdownMenuItem(value: 25, child: Text('25')),
+                        DropdownMenuItem(value: 50, child: Text('50')),
+                        DropdownMenuItem(value: 100, child: Text('100')),
+                      ],
+                      onChanged: _isLoading ? null : _changePageSize,
+                    ),
+                  ),
+                ],
+              );
+
+              if (constraints.maxWidth < 420) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    range,
+                    pageSize,
                   ],
-                  onChanged: _isLoading ? null : _changePageSize,
-                ),
-              ),
-            ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(child: range),
+                  const SizedBox(width: 8),
+                  pageSize,
+                ],
+              );
+            },
           ),
           const Divider(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          Wrap(
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               IconButton(
                 tooltip: 'First page',
@@ -1452,7 +1507,6 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
       ),
     );
   }
-
   Widget _buildBody() {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
@@ -1484,7 +1538,7 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
           LayoutBuilder(
             builder: (context, constraints) {
               final spacing = 10.0;
-              final columns = constraints.maxWidth >= 760 ? 4 : 2;
+              final columns = constraints.maxWidth >= 760 ? 4 : constraints.maxWidth >= 520 ? 2 : 1;
               final width =
                   (constraints.maxWidth - spacing * (columns - 1)) / columns;
               return Wrap(

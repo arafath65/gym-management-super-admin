@@ -83,7 +83,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
           SafeArea(
             child: Align(
-              alignment: const Alignment(0.05, 0.90),
+              alignment: Alignment.center,
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(20),
                 child: ConstrainedBox(
