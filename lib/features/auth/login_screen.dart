@@ -68,28 +68,60 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
+
     return Scaffold(
       body: Stack(
         fit: StackFit.expand,
         children: [
           // Full-screen gym and Super Admin background
           Image.asset(
-            'assets/images/super_admin_background.png',
+            isMobile ? 'assets/images/mobile_login_background.png' : 'assets/images/super_admin_background.png',
             fit: BoxFit.cover,
+            alignment: isMobile ? const Alignment(-0.35, 0) : Alignment.center,
           ),
-
           // Subtle overlay to improve contrast
           Container(color: Colors.black.withValues(alpha: 0.20)),
-
+          if (isMobile)
+            Positioned(
+              top: 20,
+              left: 0,
+              right: 0,
+              child: SafeArea(
+                bottom: false,
+                child: Center(
+                  child: Container(
+                    width: 116,
+                    height: 116,
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.25),
+                          blurRadius: 18,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: Image.asset(
+                      'assets/images/innovex_logo.png',
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           SafeArea(
             child: Align(
-              alignment: Alignment.center,
+              alignment: isMobile ? const Alignment(0, 0.25) : Alignment.center,
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(20),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 430),
                   child: Container(
-                    padding: const EdgeInsets.all(26),
+                    padding: EdgeInsets.all(isMobile ? 20 : 26),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.96),
                       borderRadius: BorderRadius.circular(22),
@@ -129,7 +161,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               color: Colors.black54,
                             ),
                           ),
-                          const SizedBox(height: 28),
+                          SizedBox(height: isMobile ? 20 : 28),
                           const Text(
                             'Sign in to your account',
                             style: TextStyle(
@@ -143,9 +175,12 @@ class _LoginScreenState extends State<LoginScreen> {
                           TextFormField(
                             controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
+                            style: const TextStyle(color: Color(0xFF111111)),
                             textInputAction: TextInputAction.next,
                             decoration: InputDecoration(
                               labelText: 'Email address',
+                              labelStyle: const TextStyle(color: Color(0xFF555555)),
+                              floatingLabelStyle: const TextStyle(color: Color(0xFFE50914)),
                               prefixIcon: const Icon(
                                 Icons.email_outlined,
                                 color: Color(0xFFE50914),
@@ -171,15 +206,19 @@ class _LoginScreenState extends State<LoginScreen> {
                           TextFormField(
                             controller: _passwordController,
                             obscureText: _obscurePassword,
+                            style: const TextStyle(color: Color(0xFF111111)),
                             textInputAction: TextInputAction.done,
                             onFieldSubmitted: (_) => _login(),
                             decoration: InputDecoration(
                               labelText: 'Password',
+                              labelStyle: const TextStyle(color: Color(0xFF555555)),
+                              floatingLabelStyle: const TextStyle(color: Color(0xFFE50914)),
                               prefixIcon: const Icon(
                                 Icons.lock_outline,
                                 color: Color(0xFFE50914),
                               ),
                               suffixIcon: IconButton(
+                                color: const Color(0xFF555555),
                                 onPressed: () {
                                   setState(() {
                                     _obscurePassword = !_obscurePassword;
@@ -216,7 +255,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ],
 
-                          const SizedBox(height: 24),
+                          SizedBox(height: isMobile ? 18 : 24),
                           SizedBox(
                             height: 52,
                             child: ElevatedButton(

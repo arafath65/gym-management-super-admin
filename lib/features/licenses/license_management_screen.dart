@@ -41,8 +41,11 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
   };
 
   static const Color _red = Color(0xFFE50914);
-  static const Color _dark = Color(0xFF111111);
-  static const Color _background = Color(0xFFD9DEE7);
+  static const Color _dark = Color(0xFF101010);
+  static const Color _background = Color(0xFF101010);
+  static const Color _card = Color(0xFF202020);
+  static const Color _border = Color(0xFF383838);
+  static const Color _muted = Color(0xFFB0B0B0);
   static const Color _green = Color(0xFF16834A);
 
   @override
@@ -245,9 +248,9 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
     return Container(
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _card,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E7EF)),
+        border: Border.all(color: _border),
       ),
       child: Row(
         children: [
@@ -270,7 +273,7 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
                 ),
                 Text(
                   title,
-                  style: const TextStyle(fontSize: 11, color: Colors.blueGrey),
+                  style: const TextStyle(fontSize: 11, color: _muted),
                 ),
               ],
             ),
@@ -289,16 +292,17 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
     return InputDecorator(
       decoration: InputDecoration(
         labelText: label,
+        labelStyle: const TextStyle(color: _muted),
         filled: true,
-        fillColor: Colors.white,
+        fillColor: _card,
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFD5DBE4)),
+          borderSide: const BorderSide(color: _border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFD5DBE4)),
+          borderSide: const BorderSide(color: _border),
         ),
       ),
       child: DropdownButtonHideUnderline(
@@ -336,9 +340,12 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
       decoration: InputDecoration(
         labelText: 'Organization',
         filled: true,
-        fillColor: Colors.white,
+        fillColor: _card,
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _border),
+        ),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<int?>(
@@ -368,12 +375,12 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
     final expiry = _formatDate(license['expires_at']);
 
     return Card(
-      color: Colors.white,
+      color: _card,
       elevation: 0,
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: Color(0xFFE2E7EF)),
+        side: const BorderSide(color: _border),
       ),
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -612,7 +619,9 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
       context: context,
       builder: (dialogContext) => Dialog(
         child: SizedBox(
-          width: MediaQuery.sizeOf(dialogContext).width < 760 ? MediaQuery.sizeOf(dialogContext).width - 80 : 680,
+          width: MediaQuery.sizeOf(dialogContext).width < 760
+              ? MediaQuery.sizeOf(dialogContext).width - 80
+              : 680,
           child: FutureBuilder<Map<String, dynamic>>(
             future: _authService.getLicenseById(licenseId: id),
             builder: (context, snapshot) {
@@ -761,11 +770,9 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
                             margin: const EdgeInsets.only(bottom: 8),
                             padding: const EdgeInsets.all(11),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF7F8FA),
+                              color: _card,
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: const Color(0xFFE2E7EF),
-                              ),
+                              border: Border.all(color: _border),
                             ),
                             child: Row(
                               children: [
@@ -872,6 +879,7 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
       },
     );
   }
+
   Future<void> _showCreateDialog() async {
     if (_organizations.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -929,9 +937,19 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
             }
 
             return AlertDialog(
+              backgroundColor: _card,
+              surfaceTintColor: Colors.transparent,
+              titleTextStyle: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+              ),
+              contentTextStyle: const TextStyle(color: _muted),
               title: const Text('Issue New License'),
               content: SizedBox(
-                width: MediaQuery.sizeOf(dialogContext).width < 520 ? MediaQuery.sizeOf(dialogContext).width - 80 : 440,
+                width: MediaQuery.sizeOf(dialogContext).width < 520
+                    ? MediaQuery.sizeOf(dialogContext).width - 80
+                    : 440,
                 child: SingleChildScrollView(
                   child: Form(
                     key: formKey,
@@ -1105,6 +1123,7 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
         );
       }
     } finally {
+      await Future<void>.delayed(const Duration(milliseconds: 200));
       maxDevicesController.dispose();
       trialDaysController.dispose();
       notesController.dispose();
@@ -1165,9 +1184,19 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
             }
 
             return AlertDialog(
+              backgroundColor: _card,
+              surfaceTintColor: Colors.transparent,
+              titleTextStyle: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+              ),
+              contentTextStyle: const TextStyle(color: _muted),
               title: Text('Renew License #$licenseId'),
               content: SizedBox(
-                width: MediaQuery.sizeOf(dialogContext).width < 500 ? MediaQuery.sizeOf(dialogContext).width - 80 : 420,
+                width: MediaQuery.sizeOf(dialogContext).width < 500
+                    ? MediaQuery.sizeOf(dialogContext).width - 80
+                    : 420,
                 child: SingleChildScrollView(
                   child: Form(
                     key: formKey,
@@ -1314,6 +1343,7 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
         );
       }
     } finally {
+      await Future<void>.delayed(const Duration(milliseconds: 200));
       maxDevicesController.dispose();
       trialDaysController.dispose();
       notesController.dispose();
@@ -1404,9 +1434,9 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _card,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E7EF)),
+        border: Border.all(color: _border),
       ),
       child: Column(
         children: [
@@ -1414,7 +1444,7 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
             builder: (context, constraints) {
               final range = Text(
                 'Showing $start-$end of $_total licenses',
-                style: const TextStyle(fontSize: 11, color: Colors.blueGrey),
+                style: const TextStyle(fontSize: 11, color: _muted),
               );
 
               final pageSize = Row(
@@ -1422,7 +1452,7 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
                 children: [
                   const Text(
                     'Rows:',
-                    style: TextStyle(fontSize: 11, color: Colors.blueGrey),
+                    style: TextStyle(fontSize: 11, color: _muted),
                   ),
                   const SizedBox(width: 6),
                   DropdownButtonHideUnderline(
@@ -1440,10 +1470,11 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
               );
 
               if (constraints.maxWidth < 420) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    range,
+                    Expanded(child: range),
+                    const SizedBox(width: 8),
                     pageSize,
                   ],
                 );
@@ -1458,7 +1489,7 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
               );
             },
           ),
-          const Divider(height: 16),
+          const Divider(height: 12, color: _border),
           Wrap(
             alignment: WrapAlignment.center,
             crossAxisAlignment: WrapCrossAlignment.center,
@@ -1507,6 +1538,7 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
       ),
     );
   }
+
   Widget _buildBody() {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
@@ -1538,7 +1570,7 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
           LayoutBuilder(
             builder: (context, constraints) {
               final spacing = 10.0;
-              final columns = constraints.maxWidth >= 760 ? 4 : constraints.maxWidth >= 520 ? 2 : 1;
+              final columns = constraints.maxWidth >= 760 ? 4 : 2;
               final width =
                   (constraints.maxWidth - spacing * (columns - 1)) / columns;
               return Wrap(
@@ -1586,45 +1618,6 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
             },
           ),
           const SizedBox(height: 18),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final wide = constraints.maxWidth >= 650;
-              final searchWidth = wide
-                  ? constraints.maxWidth - 190
-                  : constraints.maxWidth;
-              return Wrap(
-                spacing: 12,
-                runSpacing: 10,
-                children: [
-                  SizedBox(
-                    width: searchWidth,
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: _onSearchChanged,
-                      onSubmitted: (_) => _submitSearch(),
-                      textInputAction: TextInputAction.search,
-                      decoration: InputDecoration(
-                        hintText:
-                            'Search organization, code, notes or license ID',
-                        prefixIcon: const Icon(Icons.search),
-                        suffixIcon: IconButton(
-                          onPressed: _submitSearch,
-                          icon: const Icon(Icons.arrow_forward),
-                        ),
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 10),
           LayoutBuilder(
             builder: (context, constraints) {
               final columns = constraints.maxWidth >= 900
@@ -1706,6 +1699,47 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
               );
             },
           ),
+          const SizedBox(height: 10),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final wide = constraints.maxWidth >= 650;
+              final searchWidth = wide
+                  ? constraints.maxWidth - 190
+                  : constraints.maxWidth;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 10,
+                children: [
+                  SizedBox(
+                    width: searchWidth,
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: _onSearchChanged,
+                      onSubmitted: (_) => _submitSearch(),
+                      textInputAction: TextInputAction.search,
+                      decoration: InputDecoration(
+                        hintText:
+                            'Search organization, code, notes or license ID',
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: IconButton(
+                          onPressed: _submitSearch,
+                          icon: const Icon(Icons.arrow_forward),
+                        ),
+                        filled: true,
+                        fillColor: _card,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           const SizedBox(height: 18),
           Row(
             children: [
@@ -1726,7 +1760,7 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
             Container(
               padding: const EdgeInsets.all(28),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: _card,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: const Column(
@@ -1783,30 +1817,60 @@ class _LicenseManagementScreenState extends State<LicenseManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _background,
-      appBar: AppBar(
-        title: const Text(
-          'License Management',
-          style: TextStyle(fontWeight: FontWeight.bold),
+    return Theme(
+      data: Theme.of(context).copyWith(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: _background,
+        colorScheme: const ColorScheme.dark(
+          primary: _red,
+          secondary: _red,
+          surface: _card,
+          onSurface: Colors.white,
         ),
-        backgroundColor: _dark,
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: _isLoading ? null : _loadData,
-            icon: const Icon(Icons.refresh),
+        textTheme: Theme.of(context).textTheme
+            .apply(bodyColor: Colors.white, displayColor: Colors.white),
+        inputDecorationTheme: const InputDecorationTheme(
+          filled: true,
+          fillColor: _card,
+          labelStyle: TextStyle(color: _muted),
+          hintStyle: TextStyle(color: _muted),
+          enabledBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: _border),
           ),
-        ],
+          focusedBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: _red),
+          ),
+        ),
+        dialogTheme: const DialogThemeData(
+          backgroundColor: _card,
+          surfaceTintColor: Colors.transparent,
+        ),
       ),
-      body: _buildBody(),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _isLoading ? null : _showCreateDialog,
-        backgroundColor: _red,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('Issue License'),
+      child: Scaffold(
+        backgroundColor: _background,
+        appBar: AppBar(
+          title: const Text(
+            'License Management',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: _dark,
+          foregroundColor: Colors.white,
+          actions: [
+            IconButton(
+              tooltip: 'Refresh',
+              onPressed: _isLoading ? null : _loadData,
+              icon: const Icon(Icons.refresh),
+            ),
+          ],
+        ),
+        body: _buildBody(),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: _isLoading ? null : _showCreateDialog,
+          backgroundColor: _red,
+          foregroundColor: Colors.white,
+          icon: const Icon(Icons.add),
+          label: const Text('Issue License'),
+        ),
       ),
     );
   }

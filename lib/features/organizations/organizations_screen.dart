@@ -588,6 +588,9 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
         },
       );
 
+      // Wait for the dialog closing transition before disposing its controllers.
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+
       if (!mounted || result == null) return;
 
       await _loadOrganizations();
@@ -817,13 +820,13 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
     final statusColor = _licenseColor(organizationStatus);
 
     return Card(
-      color: Colors.white,
+      color: const Color(0xFF202020),
       elevation: 2,
-      shadowColor: const Color(0x18000000),
+      shadowColor: Colors.black,
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: Color(0xFFD6DEE8)),
+        side: const BorderSide(color: Color(0xFF383838)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -834,10 +837,10 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
               children: [
                 const CircleAvatar(
                   radius: 20,
-                  backgroundColor: Color(0xFFFFE8E8),
+                   backgroundColor: Color(0xFF35151D),
                   child: Icon(
                     Icons.business_outlined,
-                    color: Color(0xFFE50914),
+                     color: Color(0xFFFF1744),
                     size: 22,
                   ),
                 ),
@@ -852,6 +855,7 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontSize: 15,
+                          color: Colors.white,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -859,7 +863,7 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
                       Text(
                         code,
                         style: const TextStyle(
-                          color: Colors.blueGrey,
+                          color: Color(0xFFB0B0B0),
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                         ),
@@ -914,14 +918,14 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
                 const Icon(
                   Icons.event_outlined,
                   size: 15,
-                  color: Colors.blueGrey,
+                          color: Color(0xFFB0B0B0),
                 ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     'Expires: $expiryDate',
                     style: const TextStyle(
-                      color: Colors.blueGrey,
+                          color: Color(0xFFB0B0B0),
                       fontSize: 11,
                     ),
                     overflow: TextOverflow.ellipsis,
@@ -954,7 +958,7 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
         const SizedBox(height: 4),
         Text(
           value,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white),
         ),
       ],
     );
@@ -993,7 +997,7 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
               const Icon(
                 Icons.cloud_off_outlined,
                 size: 48,
-                color: Colors.blueGrey,
+          color: Color(0xFFB0B0B0),
               ),
               const SizedBox(height: 12),
               Text(
@@ -1068,7 +1072,7 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
     final filteredCount = _filteredOrganizations.length;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFD9DEE7),
+      backgroundColor: const Color(0xFF101010),
       appBar: AppBar(
         title: const Text(
           'Organizations',
@@ -1102,7 +1106,7 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
                     Text(
                       '$filteredCount found',
                       style: const TextStyle(
-                        color: Colors.blueGrey,
+                        color: Color(0xFFB0B0B0),
                         fontSize: 12,
                       ),
                     ),
@@ -1112,10 +1116,12 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
                 LayoutBuilder(
                   builder: (context, constraints) {
                     final searchField = TextField(
+                      style: const TextStyle(color: Colors.white),
                       controller: _searchController,
                       onChanged: (_) => setState(() {}),
                       decoration: InputDecoration(
                         hintText: 'Search name, organization code or email',
+                        hintStyle: const TextStyle(color: Color(0xFF888888)),
                         prefixIcon: const Icon(Icons.search),
                         suffixIcon: _searchController.text.isNotEmpty
                             ? IconButton(
@@ -1127,7 +1133,7 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
                               )
                             : null,
                         filled: true,
-                        fillColor: Colors.white,
+                        fillColor: const Color(0xFF202020),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: const BorderSide(
@@ -1144,12 +1150,13 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
                     );
 
                     final statusFilter = DropdownButtonFormField<String>(
+                      style: const TextStyle(color: Colors.white),
                       initialValue: _statusFilter,
                       decoration: const InputDecoration(
                         labelText: 'Status',
                         border: OutlineInputBorder(),
                         filled: true,
-                        fillColor: Colors.white,
+                        fillColor: Color(0xFF202020),
                         contentPadding: EdgeInsets.symmetric(
                           horizontal: 12,
                           vertical: 10,

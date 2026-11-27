@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../../core/services/auth_service.dart';
 
@@ -15,7 +15,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
 
   static const Color _red = Color(0xFFE50914);
   static const Color _dark = Color(0xFF111111);
-  static const Color _background = Color(0xFFD9DEE7);
+  static const Color _background = Color(0xFF101010);
 
   List<Map<String, dynamic>> _organizations = [];
   List<Map<String, dynamic>> _branches = [];
@@ -339,7 +339,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                             width: 18,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: Colors.white,
+                              color: Color(0xFF202020),
                             ),
                           )
                         : Text(
@@ -370,6 +370,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
         );
       }
     } finally {
+      await Future.delayed(const Duration(milliseconds: 350));
       nameController.dispose();
       codeController.dispose();
       phoneController.dispose();
@@ -555,12 +556,12 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
     final active = status == 'active';
 
     return Card(
-      color: Colors.white,
+      color: const Color(0xFF202020),
       elevation: 0,
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: Color(0xFFE2E7EF)),
+        side: const BorderSide(color: Color(0xFF383838)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -584,14 +585,14 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: _dark,
+                          color: Colors.white,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         branch['branch_code']?.toString() ?? '',
                         style: const TextStyle(
-                          color: Colors.blueGrey,
+                          color: Color(0xFFB0B0B0),
                           fontSize: 12,
                         ),
                       ),
@@ -609,7 +610,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                   const Icon(
                     Icons.phone_outlined,
                     size: 16,
-                    color: Colors.blueGrey,
+                    color: Color(0xFFB0B0B0),
                   ),
                   const SizedBox(width: 8),
                   Expanded(child: Text(branch['phone'].toString())),
@@ -624,7 +625,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                   const Icon(
                     Icons.location_on_outlined,
                     size: 16,
-                    color: Colors.blueGrey,
+                    color: Color(0xFFB0B0B0),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -647,9 +648,9 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFF202020),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFD5DBE4)),
+        border: Border.all(color: const Color(0xFF383838)),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
@@ -688,7 +689,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
       appBar: AppBar(
         title: const Text(
           'BRANCH MANAGEMENT',
-          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5),
         ),
         backgroundColor: _dark,
         foregroundColor: Colors.white,
@@ -727,15 +728,15 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
             const SizedBox(height: 6),
             const Text(
               'Select an organization to view and manage its branches.',
-              style: TextStyle(color: Colors.blueGrey),
+              style: TextStyle(color: Color(0xFFB0B0B0)),
             ),
             const SizedBox(height: 20),
             Card(
-              color: Colors.white,
+              color: const Color(0xFF202020),
               elevation: 0,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
-                side: const BorderSide(color: Color(0xFFE2E7EF)),
+                side: const BorderSide(color: Color(0xFF383838)),
               ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -802,7 +803,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(28),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: const Color(0xFF202020),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Column(
@@ -810,7 +811,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                     Icon(
                       Icons.account_tree_outlined,
                       size: 42,
-                      color: Colors.blueGrey,
+                      color: Color(0xFFB0B0B0),
                     ),
                     SizedBox(height: 12),
                     Text(
@@ -820,7 +821,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                     SizedBox(height: 6),
                     Text(
                       'Its branches will appear here.',
-                      style: TextStyle(color: Colors.blueGrey),
+                      style: TextStyle(color: Color(0xFFB0B0B0)),
                     ),
                   ],
                 ),
@@ -834,7 +835,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
               ),
             ] else if (_error != null) ...[
               Card(
-                color: Colors.white,
+                color: const Color(0xFF202020),
                 child: Padding(
                   padding: const EdgeInsets.all(18),
                   child: Column(
@@ -869,7 +870,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                               icon: const Icon(Icons.close),
                             ),
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: const Color(0xFF202020),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
@@ -919,7 +920,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                   ),
                   Text(
                     '${filtered.length} found',
-                    style: const TextStyle(color: Colors.blueGrey),
+                    style: const TextStyle(color: Color(0xFFB0B0B0)),
                   ),
                 ],
               ),
@@ -929,7 +930,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(28),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: const Color(0xFF202020),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: const Column(
@@ -937,7 +938,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                       Icon(
                         Icons.store_outlined,
                         size: 40,
-                        color: Colors.blueGrey,
+                        color: Color(0xFFB0B0B0),
                       ),
                       SizedBox(height: 12),
                       Text(
@@ -947,7 +948,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                       SizedBox(height: 6),
                       Text(
                         'Create a branch or change your filters.',
-                        style: TextStyle(color: Colors.blueGrey),
+                        style: TextStyle(color: Color(0xFFB0B0B0)),
                       ),
                     ],
                   ),
@@ -987,3 +988,5 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
     );
   }
 }
+
+

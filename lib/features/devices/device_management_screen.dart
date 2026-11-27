@@ -52,7 +52,7 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
 
   static const Color _red = Color(0xFFE50914);
   static const Color _dark = Color(0xFF111111);
-  static const Color _background = Color(0xFFD9DEE7);
+  static const Color _background = Color(0xFF101010);
 
   @override
   void initState() {
@@ -287,7 +287,7 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
     if (value == null) return 'Never';
 
     final date = DateTime.tryParse(value.toString());
-    if (date == null) return 'ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â';
+    if (date == null) return 'ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â';
 
     final local = date.toLocal();
 
@@ -737,6 +737,7 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
       },
     );
 
+    await Future.delayed(const Duration(milliseconds: 350));
     nameController.dispose();
     uuidController.dispose();
 
@@ -869,42 +870,74 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
     required Color color,
   }) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E7EF)),
+        color: const Color(0xFF202020),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF383838)),
       ),
-      child: Row(
-        children: [
-          CircleAvatar(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isMobileCard = constraints.maxWidth < 140;
+
+          final iconWidget = CircleAvatar(
+            radius: isMobileCard ? 15 : 20,
             backgroundColor: color.withValues(alpha: 0.10),
-            child: Icon(icon, color: color),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  value.toString(),
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  title,
-                  style: const TextStyle(fontSize: 11, color: Colors.blueGrey),
-                ),
-              ],
+            child: Icon(
+              icon,
+              color: color,
+              size: isMobileCard ? 17 : 22,
             ),
-          ),
-        ],
+          );
+
+          final textWidget = Column(
+            crossAxisAlignment: isMobileCard
+                ? CrossAxisAlignment.center
+                : CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                value.toString(),
+                style: TextStyle(
+                  fontSize: isMobileCard ? 19 : 22,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: Color(0xFFB0B0B0),
+                ),
+              ),
+            ],
+          );
+
+          if (isMobileCard) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                iconWidget,
+                const SizedBox(height: 5),
+                textWidget,
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              iconWidget,
+              const SizedBox(width: 10),
+              Expanded(child: textWidget),
+            ],
+          );
+        },
       ),
     );
   }
-
   Widget _deviceCard(Map<String, dynamic> device) {
     final status = device['status']?.toString() ?? 'unknown';
     final organizationName =
@@ -917,12 +950,12 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
     final isExpanded = _expandedDeviceIds.contains(deviceKey);
 
     return Card(
-      color: Colors.white,
+      color: const Color(0xFF202020),
       elevation: 0,
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: Color(0xFFE2E7EF)),
+        side: const BorderSide(color: Color(0xFF383838)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -973,13 +1006,14 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 14,
+                                    color: Colors.white,
                                   ),
                                 ),
                                 const SizedBox(height: 3),
                                 Text(
                                   _typeLabel(device['device_type']),
                                   style: const TextStyle(
-                                    color: Colors.blueGrey,
+                                    color: Color(0xFFB0B0B0),
                                     fontSize: 11,
                                   ),
                                 ),
@@ -991,7 +1025,7 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                             isExpanded
                                 ? Icons.keyboard_arrow_up
                                 : Icons.keyboard_arrow_down,
-                            color: Colors.blueGrey,
+                            color: Color(0xFFB0B0B0),
                             size: 21,
                           ),
                         ],
@@ -1010,7 +1044,7 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
 
             if (isExpanded) ...[
               const SizedBox(height: 10),
-              const Divider(height: 1),
+              const Divider(height: 1, color: Color(0xFF383838)),
               const SizedBox(height: 12),
               _detailRow(
                 Icons.business_outlined,
@@ -1115,19 +1149,19 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 16, color: Colors.blueGrey),
+        Icon(icon, size: 16, color: Color(0xFFB0B0B0)),
         const SizedBox(width: 8),
         SizedBox(
           width: 105,
           child: Text(
             label,
-            style: const TextStyle(color: Colors.blueGrey, fontSize: 11),
+            style: const TextStyle(color: Color(0xFFB0B0B0), fontSize: 11),
           ),
         ),
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.white),
           ),
         ),
       ],
@@ -1139,15 +1173,15 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
       decoration: InputDecoration(
         labelText: 'Status',
         filled: true,
-        fillColor: Colors.white,
+        fillColor: const Color(0xFF202020),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFD5DBE4)),
+          borderSide: const BorderSide(color: Color(0xFF383838)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFD5DBE4)),
+          borderSide: const BorderSide(color: Color(0xFF383838)),
         ),
       ),
       child: DropdownButtonHideUnderline(
@@ -1191,15 +1225,15 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
       decoration: InputDecoration(
         labelText: 'Organization',
         filled: true,
-        fillColor: Colors.white,
+        fillColor: const Color(0xFF202020),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFD5DBE4)),
+          borderSide: const BorderSide(color: Color(0xFF383838)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFD5DBE4)),
+          borderSide: const BorderSide(color: Color(0xFF383838)),
         ),
       ),
       child: DropdownButtonHideUnderline(
@@ -1240,15 +1274,15 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
       decoration: InputDecoration(
         labelText: 'Branch',
         filled: true,
-        fillColor: Colors.white,
+        fillColor: const Color(0xFF202020),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFD5DBE4)),
+          borderSide: const BorderSide(color: Color(0xFF383838)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFD5DBE4)),
+          borderSide: const BorderSide(color: Color(0xFF383838)),
         ),
       ),
       child: DropdownButtonHideUnderline(
@@ -1269,119 +1303,200 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
   }
 
   Widget _buildPaginationControls() {
-    final start = _totalDevices == 0 ? 0 : ((_currentPage - 1) * _pageSize) + 1;
+    final start = _totalDevices == 0
+        ? 0
+        : ((_currentPage - 1) * _pageSize) + 1;
 
     final calculatedEnd = _currentPage * _pageSize;
-    final end = calculatedEnd > _totalDevices ? _totalDevices : calculatedEnd;
+    final end = calculatedEnd > _totalDevices
+        ? _totalDevices
+        : calculatedEnd;
 
     final displayedPageCount = _totalPages == 0 ? 1 : _totalPages;
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E7EF)),
-      ),
-      child: Column(
-        children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isNarrow = constraints.maxWidth < 420;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 560;
 
-              final range = Text(
-                'Showing $start-$end of $_totalDevices devices',
-                style: const TextStyle(
-                  color: Colors.blueGrey,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              );
+        return Container(
+          padding: isMobile
+              ? const EdgeInsets.symmetric(horizontal: 10, vertical: 5)
+              : const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: isMobile
+                ? const Color(0xFF202020)
+                : Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isMobile
+                  ? const Color(0xFF383838)
+                  : const Color(0xFFE2E7EF),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              LayoutBuilder(
+                builder: (context, innerConstraints) {
+                  final isNarrow = innerConstraints.maxWidth < 420;
 
-              final pageSize = Row(
-                mainAxisSize: MainAxisSize.min,
+                  final range = Text(
+                    'Showing $start-$end of $_totalDevices devices',
+                    style: TextStyle(
+                      color: isMobile
+                          ? const Color(0xFFB0B0B0)
+                          : Colors.blueGrey,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  );
+
+                  final pageSize = Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Rows:',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isMobile
+                              ? const Color(0xFFB0B0B0)
+                              : Colors.blueGrey,
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      DropdownButtonHideUnderline(
+                        child: DropdownButton<int>(
+                          value: _pageSize,
+                          isDense: true,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isMobile ? Colors.white : null,
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 25,
+                              child: Text('25'),
+                            ),
+                            DropdownMenuItem(
+                              value: 50,
+                              child: Text('50'),
+                            ),
+                            DropdownMenuItem(
+                              value: 100,
+                              child: Text('100'),
+                            ),
+                          ],
+                          onChanged:
+                              _isLoading ? null : _onPageSizeChanged,
+                        ),
+                      ),
+                    ],
+                  );
+
+                  if (isMobile) {
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [range, pageSize],
+                    );
+                  }
+
+                  if (isNarrow) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [range, pageSize],
+                    );
+                  }
+
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [range, pageSize],
+                  );
+                },
+              ),
+              Divider(
+                height: isMobile ? 10 : 18,
+                color: isMobile ? const Color(0xFF383838) : null,
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text(
-                    'Rows:',
-                    style: TextStyle(fontSize: 12, color: Colors.blueGrey),
+                  IconButton(
+                    tooltip: 'First page',
+                    visualDensity: isMobile
+                        ? VisualDensity.compact
+                        : VisualDensity.standard,
+                    constraints: isMobile
+                        ? const BoxConstraints.tightFor(width: 34, height: 34)
+                        : const BoxConstraints(minWidth: 48, minHeight: 48),
+                    padding: isMobile ? EdgeInsets.zero : null,
+                    onPressed: !_isLoading && _currentPage > 1
+                        ? () => _goToPage(1)
+                        : null,
+                    icon: const Icon(Icons.first_page),
                   ),
-                  const SizedBox(width: 8),
-                  DropdownButtonHideUnderline(
-                    child: DropdownButton<int>(
-                      value: _pageSize,
-                      items: const [
-                        DropdownMenuItem(value: 25, child: Text('25')),
-                        DropdownMenuItem(value: 50, child: Text('50')),
-                        DropdownMenuItem(value: 100, child: Text('100')),
-                      ],
-                      onChanged: _isLoading ? null : _onPageSizeChanged,
+                  IconButton(
+                    tooltip: 'Previous page',
+                    visualDensity: isMobile
+                        ? VisualDensity.compact
+                        : VisualDensity.standard,
+                    constraints: isMobile
+                        ? const BoxConstraints.tightFor(width: 34, height: 34)
+                        : const BoxConstraints(minWidth: 48, minHeight: 48),
+                    padding: isMobile ? EdgeInsets.zero : null,
+                    onPressed: !_isLoading && _currentPage > 1
+                        ? () => _goToPage(_currentPage - 1)
+                        : null,
+                    icon: const Icon(Icons.chevron_left),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isMobile ? 5 : 12,
+                    ),
+                    child: Text(
+                      'Page $_currentPage of $displayedPageCount',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isMobile ? Colors.white : null,
+                      ),
                     ),
                   ),
-                ],
-              );
-
-              if (isNarrow) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [range, pageSize],
-                );
-              }
-
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [range, pageSize],
-              );
-            },
-          ),
-          const Divider(height: 18),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              IconButton(
-                tooltip: 'First page',
-                onPressed: !_isLoading && _currentPage > 1
-                    ? () => _goToPage(1)
-                    : null,
-                icon: const Icon(Icons.first_page),
-              ),
-              IconButton(
-                tooltip: 'Previous page',
-                onPressed: !_isLoading && _currentPage > 1
-                    ? () => _goToPage(_currentPage - 1)
-                    : null,
-                icon: const Icon(Icons.chevron_left),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text(
-                  'Page $_currentPage of $displayedPageCount',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                  IconButton(
+                    tooltip: 'Next page',
+                    visualDensity: isMobile
+                        ? VisualDensity.compact
+                        : VisualDensity.standard,
+                    constraints: isMobile
+                        ? const BoxConstraints.tightFor(width: 34, height: 34)
+                        : const BoxConstraints(minWidth: 48, minHeight: 48),
+                    padding: isMobile ? EdgeInsets.zero : null,
+                    onPressed: !_isLoading && _currentPage < _totalPages
+                        ? () => _goToPage(_currentPage + 1)
+                        : null,
+                    icon: const Icon(Icons.chevron_right),
                   ),
-                ),
-              ),
-              IconButton(
-                tooltip: 'Next page',
-                onPressed: !_isLoading && _currentPage < _totalPages
-                    ? () => _goToPage(_currentPage + 1)
-                    : null,
-                icon: const Icon(Icons.chevron_right),
-              ),
-              IconButton(
-                tooltip: 'Last page',
-                onPressed: !_isLoading && _currentPage < _totalPages
-                    ? () => _goToPage(_totalPages)
-                    : null,
-                icon: const Icon(Icons.last_page),
+                  IconButton(
+                    tooltip: 'Last page',
+                    visualDensity: isMobile
+                        ? VisualDensity.compact
+                        : VisualDensity.standard,
+                    constraints: isMobile
+                        ? const BoxConstraints.tightFor(width: 34, height: 34)
+                        : const BoxConstraints(minWidth: 48, minHeight: 48),
+                    padding: isMobile ? EdgeInsets.zero : null,
+                    onPressed: !_isLoading && _currentPage < _totalPages
+                        ? () => _goToPage(_totalPages)
+                        : null,
+                    icon: const Icon(Icons.last_page),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
-
   @override
   Widget build(BuildContext context) {
     final filtered = _filteredDevices;
@@ -1390,7 +1505,7 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
       appBar: AppBar(
         title: const Text(
           'Device Management',
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 0.5),
         ),
         backgroundColor: _dark,
         foregroundColor: Colors.white,
@@ -1438,11 +1553,11 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                   children: [
                     LayoutBuilder(
                       builder: (context, constraints) {
-                        final width = constraints.maxWidth >= 900
+                        final width = constraints.maxWidth < 560
                             ? (constraints.maxWidth - 20) / 3
-                            : constraints.maxWidth >= 560
-                                ? (constraints.maxWidth - 10) / 2
-                                : constraints.maxWidth;
+                            : constraints.maxWidth >= 900
+                                ? (constraints.maxWidth - 20) / 3
+                                : (constraints.maxWidth - 10) / 2;
 
                         return Wrap(
                           spacing: 10,
@@ -1454,7 +1569,7 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                                 title: 'Total',
                                 value: _countStatus('all'),
                                 icon: Icons.devices,
-                                color: _dark,
+                                color: const Color(0xFFB0B0B0),
                               ),
                             ),
                             SizedBox(
@@ -1509,7 +1624,7 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                                     icon: const Icon(Icons.arrow_forward),
                                   ),
                                   filled: true,
-                                  fillColor: Colors.white,
+                                  fillColor: const Color(0xFF202020),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
                                     borderSide: BorderSide.none,
@@ -1564,13 +1679,14 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                             style: TextStyle(
                               fontSize: 17,
                               fontWeight: FontWeight.bold,
+                              color: Colors.white,
                             ),
                           ),
                         ),
                         Text(
                           '${filtered.length} devices',
                           style: const TextStyle(
-                            color: Colors.blueGrey,
+                            color: Color(0xFFB0B0B0),
                             fontSize: 12,
                           ),
                         ),
@@ -1581,7 +1697,7 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                       Container(
                         padding: const EdgeInsets.all(28),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: const Color(0xFF202020),
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: const Column(
@@ -1589,7 +1705,7 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                             Icon(
                               Icons.devices_other,
                               size: 42,
-                              color: Colors.blueGrey,
+                              color: Color(0xFFB0B0B0),
                             ),
                             SizedBox(height: 10),
                             Text(
@@ -1601,7 +1717,7 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
                               'Register a device or change your filters.',
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                color: Colors.blueGrey,
+                                color: Color(0xFFB0B0B0),
                                 fontSize: 12,
                               ),
                             ),
@@ -1646,3 +1762,4 @@ class _DeviceManagementScreenState extends State<DeviceManagementScreen> {
     );
   }
 }
+

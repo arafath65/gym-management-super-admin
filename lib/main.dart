@@ -13,24 +13,29 @@ class GymSuperAdminApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Gym Super Admin',
+      title: 'Innovex Gym Admin',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
+        brightness: Brightness.dark,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFE50914),
-          primary: const Color(0xFFE50914),
-          secondary: const Color(0xFF111111),
-          surface: Colors.white,
+          seedColor: const Color(0xFFFF1744),
+          brightness: Brightness.dark,
+          primary: const Color(0xFFFF1744),
+          secondary: const Color(0xFF333333),
+          surface: const Color(0xFF202020),
         ),
-        scaffoldBackgroundColor: const Color(0xFFF7F7F7),
+        scaffoldBackgroundColor: const Color(0xFF101010),
         appBarTheme: const AppBarTheme(
           backgroundColor: Color(0xFF111111),
           foregroundColor: Colors.white,
+          elevation: 0,
         ),
+        cardTheme: const CardThemeData(color: Color(0xFF202020), elevation: 0),
+        dividerColor: Color(0xFF333333),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFE50914),
+            backgroundColor: const Color(0xFFFF1744),
             foregroundColor: Colors.white,
           ),
         ),

@@ -36,8 +36,11 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
   final Set<int> _expandedIds = <int>{};
 
   static const Color _red = Color(0xFFE50914);
-  static const Color _dark = Color(0xFF111111);
-  static const Color _background = Color(0xFFD9DEE7);
+  static const Color _card = Color(0xFF202020);
+  static const Color _border = Color(0xFF383838);
+  static const Color _muted = Color(0xFFB0B0B0);
+  static const Color _dark = Color(0xFF101010);
+  static const Color _background = Color(0xFF101010);
 
   @override
   void initState() {
@@ -266,19 +269,21 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
     return InputDecorator(
       decoration: InputDecoration(
         labelText: label,
+        labelStyle: const TextStyle(color: _muted),
         filled: true,
-        fillColor: Colors.white,
+        fillColor: _card,
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFD5DBE4)),
+          borderSide: const BorderSide(color: _border),
         ),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<T>(
           value: value,
           isExpanded: true,
+          style: const TextStyle(color: Colors.white),
           items: items,
           onChanged: onChanged,
         ),
@@ -291,9 +296,9 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
     final label = isFromDate ? 'From date' : 'To date';
     return OutlinedButton.icon(
       style: OutlinedButton.styleFrom(
-        backgroundColor: Colors.white,
-        foregroundColor: _dark,
-        side: const BorderSide(color: Color(0xFFD5DBE4)),
+        backgroundColor: _card,
+        foregroundColor: Colors.white,
+        side: const BorderSide(color: _border),
         minimumSize: const Size(0, 52),
         alignment: Alignment.centerLeft,
         padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -306,44 +311,6 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontSize: 12),
-      ),
-    );
-  }
-
-  Widget _summaryCard(String label, int value, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E7EF)),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            backgroundColor: color.withValues(alpha: 0.10),
-            child: Icon(icon, color: color),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  value.toString(),
-                  style: const TextStyle(
-                    fontSize: 21,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  label,
-                  style: const TextStyle(color: Colors.blueGrey, fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -362,10 +329,7 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
                   children: [
                     Text(
                       label,
-                      style: const TextStyle(
-                        color: Colors.blueGrey,
-                        fontSize: 12,
-                      ),
+                      style: const TextStyle(color: _muted, fontSize: 12),
                     ),
                     const SizedBox(height: 3),
                     SelectableText(
@@ -384,10 +348,7 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
                       width: 118,
                       child: Text(
                         label,
-                        style: const TextStyle(
-                          color: Colors.blueGrey,
-                          fontSize: 12,
-                        ),
+                        style: const TextStyle(color: _muted, fontSize: 12),
                       ),
                     ),
                     Expanded(
@@ -405,6 +366,7 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
       },
     );
   }
+
   Widget _jsonPanel(String title, dynamic value, IconData icon) {
     final text = _jsonText(value);
     return Container(
@@ -412,16 +374,16 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
       margin: const EdgeInsets.only(top: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF5F6F8),
+        color: _card,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE2E7EF)),
+        border: Border.all(color: _border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon, size: 16, color: Colors.blueGrey),
+              Icon(icon, size: 16, color: _muted),
               const SizedBox(width: 7),
               Text(
                 title,
@@ -458,12 +420,12 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
     final entityId = log['entity_id']?.toString();
 
     return Card(
-      color: Colors.white,
+      color: _card,
       elevation: 0,
-      margin: EdgeInsets.zero,
+      margin: const EdgeInsets.only(bottom: 10),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: Color(0xFFE2E7EF)),
+        side: const BorderSide(color: _border),
       ),
       child: Column(
         children: [
@@ -505,18 +467,12 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
                           adminName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: Colors.blueGrey,
-                          ),
+                          style: const TextStyle(fontSize: 11, color: _muted),
                         ),
                         const SizedBox(height: 3),
                         Text(
                           _formatDate(log['created_at']),
-                          style: const TextStyle(
-                            fontSize: 10,
-                            color: Colors.blueGrey,
-                          ),
+                          style: const TextStyle(fontSize: 10, color: _muted),
                         ),
                       ],
                     ),
@@ -526,14 +482,14 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
                     expanded
                         ? Icons.keyboard_arrow_up
                         : Icons.keyboard_arrow_down,
-                    color: Colors.blueGrey,
+                    color: _muted,
                   ),
                 ],
               ),
             ),
           ),
           if (expanded) ...[
-            const Divider(height: 1),
+            const Divider(height: 1, color: _border),
             Padding(
               padding: const EdgeInsets.all(14),
               child: Column(
@@ -604,11 +560,11 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
     final pages = _totalPages == 0 ? 1 : _totalPages;
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _card,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E7EF)),
+        border: Border.all(color: _border),
       ),
       child: Column(
         children: [
@@ -616,10 +572,7 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
             builder: (context, constraints) {
               final rangeLabel = Text(
                 'Showing $start-$end of $_total records',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.blueGrey,
-                ),
+                style: const TextStyle(fontSize: 12, color: _muted),
               );
 
               final rowsSelector = Row(
@@ -627,10 +580,7 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
                 children: [
                   const Text(
                     'Rows:',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.blueGrey,
-                    ),
+                    style: TextStyle(fontSize: 12, color: _muted),
                   ),
                   const SizedBox(width: 8),
                   DropdownButtonHideUnderline(
@@ -648,11 +598,10 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
               );
 
               if (constraints.maxWidth < 460) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                return Row(
                   children: [
-                    rangeLabel,
-                    const SizedBox(height: 4),
+                    Expanded(child: rangeLabel),
+                    const SizedBox(width: 6),
                     rowsSelector,
                   ],
                 );
@@ -667,7 +616,7 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
               );
             },
           ),
-          const Divider(height: 16),
+          const Divider(height: 16, color: _border),
           Wrap(
             alignment: WrapAlignment.center,
             crossAxisAlignment: WrapCrossAlignment.center,
@@ -716,6 +665,7 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
       ),
     );
   }
+
   Widget _buildBody() {
     if (_isLoading && _auditLogs.isEmpty) {
       return const Center(child: CircularProgressIndicator());
@@ -728,11 +678,7 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
-                Icons.cloud_off_outlined,
-                size: 46,
-                color: Colors.blueGrey,
-              ),
+              const Icon(Icons.cloud_off_outlined, size: 46, color: _muted),
               const SizedBox(height: 12),
               Text(_error!, textAlign: TextAlign.center),
               const SizedBox(height: 14),
@@ -753,48 +699,6 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
         children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final spacing = 10.0;
-              final columns = constraints.maxWidth >= 900 ? 3 : constraints.maxWidth >= 520 ? 2 : 1;
-              final width =
-                  (constraints.maxWidth - spacing * (columns - 1)) / columns;
-              return Wrap(
-                spacing: spacing,
-                runSpacing: spacing,
-                children: [
-                  SizedBox(
-                    width: width,
-                    child: _summaryCard(
-                      'Audit records',
-                      _total,
-                      Icons.history,
-                      _dark,
-                    ),
-                  ),
-                  SizedBox(
-                    width: width,
-                    child: _summaryCard(
-                      'Actions available',
-                      _actions.length,
-                      Icons.tune,
-                      const Color(0xFF356AA0),
-                    ),
-                  ),
-                  SizedBox(
-                    width: width,
-                    child: _summaryCard(
-                      'Entity types',
-                      _entityTypes.length,
-                      Icons.category_outlined,
-                      const Color(0xFF16834A),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 18),
           TextField(
             controller: _searchController,
             onChanged: _onSearchChanged,
@@ -815,7 +719,7 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
                 icon: const Icon(Icons.arrow_forward),
               ),
               filled: true,
-              fillColor: Colors.white,
+              fillColor: _card,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
@@ -825,7 +729,11 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
           const SizedBox(height: 10),
           LayoutBuilder(
             builder: (context, constraints) {
-              final columns = constraints.maxWidth >= 1000 ? 4 : constraints.maxWidth >= 600 ? 2 : 1;
+              final columns = constraints.maxWidth >= 1000
+                  ? 4
+                  : constraints.maxWidth >= 600
+                  ? 2
+                  : 1;
               final gap = 10.0;
               final width =
                   (constraints.maxWidth - gap * (columns - 1)) / columns;
@@ -892,12 +800,14 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
                     ),
                   ),
                   SizedBox(
-                    width: width,
-                    child: _dateFilterButton(isFromDate: true),
-                  ),
-                  SizedBox(
-                    width: width,
-                    child: _dateFilterButton(isFromDate: false),
+                    width: constraints.maxWidth,
+                    child: Row(
+                      children: [
+                        Expanded(child: _dateFilterButton(isFromDate: true)),
+                        const SizedBox(width: 10),
+                        Expanded(child: _dateFilterButton(isFromDate: false)),
+                      ],
+                    ),
                   ),
                 ],
               );
@@ -934,7 +844,7 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
               ),
               Text(
                 '$_total records',
-                style: const TextStyle(fontSize: 12, color: Colors.blueGrey),
+                style: const TextStyle(fontSize: 12, color: _muted),
               ),
             ],
           ),
@@ -943,12 +853,13 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
             Container(
               padding: const EdgeInsets.all(28),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: _card,
                 borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: _border),
               ),
               child: const Column(
                 children: [
-                  Icon(Icons.history, size: 42, color: Colors.blueGrey),
+                  Icon(Icons.history, size: 42, color: _muted),
                   SizedBox(height: 10),
                   Text(
                     'No audit records found',
@@ -958,7 +869,7 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
                   Text(
                     'Try changing your search or filters.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.blueGrey, fontSize: 12),
+                    style: TextStyle(color: _muted, fontSize: 12),
                   ),
                 ],
               ),
@@ -976,24 +887,54 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _background,
-      appBar: AppBar(
-        title: const Text(
-          'Audit Logs',
-          style: TextStyle(fontWeight: FontWeight.bold),
+    return Theme(
+      data: Theme.of(context).copyWith(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: _background,
+        colorScheme: const ColorScheme.dark(
+          primary: _red,
+          secondary: _red,
+          surface: _card,
+          onSurface: Colors.white,
         ),
-        backgroundColor: _dark,
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: _isLoading ? null : () => _loadData(),
-            icon: const Icon(Icons.refresh),
+        textTheme: Theme.of(context).textTheme
+            .apply(bodyColor: Colors.white, displayColor: Colors.white),
+        inputDecorationTheme: const InputDecorationTheme(
+          filled: true,
+          fillColor: _card,
+          labelStyle: TextStyle(color: _muted),
+          hintStyle: TextStyle(color: _muted),
+          enabledBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: _border),
           ),
-        ],
+          focusedBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: _red),
+          ),
+        ),
+        dialogTheme: const DialogThemeData(
+          backgroundColor: _card,
+          surfaceTintColor: Colors.transparent,
+        ),
       ),
-      body: _buildBody(),
+      child: Scaffold(
+        backgroundColor: _background,
+        appBar: AppBar(
+          title: const Text(
+            'Audit Logs',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: _dark,
+          foregroundColor: Colors.white,
+          actions: [
+            IconButton(
+              tooltip: 'Refresh',
+              onPressed: _isLoading ? null : () => _loadData(),
+              icon: const Icon(Icons.refresh),
+            ),
+          ],
+        ),
+        body: _buildBody(),
+      ),
     );
   }
 }

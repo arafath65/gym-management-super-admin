@@ -93,7 +93,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         elevation: 0,
       ),
       body: Container(
-        color: const Color(0xFFD9DEE7),
+        color: const Color(0xFF101010),
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -109,7 +109,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const SizedBox(height: 6),
               const Text(
                 'Manage your gym platform',
-                style: TextStyle(color: Colors.blueGrey),
+                style: TextStyle(color: Color(0xFFB0B0B0)),
               ),
               const SizedBox(height: 24),
 
@@ -125,7 +125,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ? 4
                       : constraints.maxWidth >= 560
                           ? 2
-                          : 1;
+                          : 2;
 
                   const spacing = 12.0;
                   final cardWidth =
@@ -324,9 +324,9 @@ class _SummaryCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFF202020),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E7EF)),
+        border: Border.all(color: const Color(0xFF333333)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -335,12 +335,12 @@ class _SummaryCard extends StatelessWidget {
           const SizedBox(height: 14),
           Text(
             value,
-            style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+            style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white),
           ),
           const SizedBox(height: 4),
           Text(
             title,
-            style: const TextStyle(color: Colors.blueGrey, fontSize: 13),
+            style: const TextStyle(color: Color(0xFFB0B0B0), fontSize: 13),
           ),
         ],
       ),
@@ -364,22 +364,22 @@ class _MenuTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      color: Colors.white,
+      color: const Color(0xFF202020),
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: Color(0xFFE2E7EF)),
+        side: const BorderSide(color: Color(0xFF333333)),
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: CircleAvatar(
-          backgroundColor: const Color(0xFFFFE8E8),
-          child: Icon(icon, color: const Color(0xFFE50914)),
+          backgroundColor: const Color(0xFF35151D),
+          child: Icon(icon, color: const Color(0xFFFF1744)),
         ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text(subtitle),
-        trailing: const Icon(Icons.chevron_right),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
+        subtitle: Text(subtitle, style: const TextStyle(color: Color(0xFFB0B0B0))),
+        trailing: const Icon(Icons.chevron_right, color: Color(0xFFB0B0B0)),
         onTap: onTap,
       ),
     );
